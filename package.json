@@ -1,0 +1,37 @@
+{
+  "name": "cql-cli",
+  "version": "1.0.0",
+  "description": "A helper CLI aimed at supporting CQL (Clinical Quality Language) operations on HAPI-FHIR servers.",
+  "main": "index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AbhishekSinghDhadwal/cql-cli.git"
+  },
+  "keywords": [
+    "Clinical",
+    "Quality",
+    "Language",
+    "CQL",
+    "hapi-fhir",
+    "HAPI-FHIR",
+    "CDS",
+    "FHIR",
+    "cql"
+  ],
+  "author": "Abhishek Dhadwal",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/AbhishekSinghDhadwal/cql-cli/issues"
+  },
+  "homepage": "https://github.com/AbhishekSinghDhadwal/cql-cli#readme",
+  "dependencies": {
+    "axios": "^1.7.7",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.8.5"
+  }
+}
