@@ -17,7 +17,7 @@ program
       } else {
         console.log(base64Content);
       }
-    } catch (error:any) {
+    } catch (error: any) {
       console.error(`Error: ${error.message}`);
     }
   });
@@ -44,7 +44,7 @@ program
       // Write the FHIR bundle JSON to outputPath
       fs.writeFileSync(outputPath, JSON.stringify(fhirBundle, null, 2));
       console.log(`FHIR bundle written to ${outputPath}`);
-    } catch (error:any) {
+    } catch (error: any) {
       console.error(`Error: ${error.message}`);
     }
   });
@@ -68,7 +68,47 @@ program
 
       console.log(`Response Status: ${response.status} ${response.statusText}`);
       console.log('Response Data:', JSON.stringify(response.data, null, 2));
-    } catch (error:any) {
+    } catch (error: any) {
+      if (error.response) {
+        console.error(`HTTP Error: ${error.response.status} ${error.response.statusText}`);
+        console.error('Response Data:', JSON.stringify(error.response.data, null, 2));
+      } else {
+        console.error(`Error: ${error.message}`);
+      }
+    }
+  });
+
+program
+  .command('CreateAndPOST <filePath> <outputPath> <description> <url>')
+  .description('Creates a FHIR bundle from a .cql file and posts it to a specified URL')
+  .action(async (filePath, outputPath, description, url) => {
+    try {
+      const content = fs.readFileSync(filePath, 'utf8');
+
+      const libraryInfo = extractLibraryInfo(content);
+      if (!libraryInfo) {
+        console.error('Could not extract library name and version from the .cql file.');
+        process.exit(1);
+      }
+      const { libraryName, version } = libraryInfo;
+      const base64Content = Buffer.from(content).toString('base64');
+
+      const baseUrl = url.endsWith('/') ? url : url + '/';
+      const fhirBundle = buildFHIRBundle(libraryName, version, description, base64Content, baseUrl);
+
+      fs.writeFileSync(outputPath, JSON.stringify(fhirBundle, null, 2));
+      console.log(`FHIR bundle written to ${outputPath}`);
+
+      const response = await axios.post(baseUrl, fhirBundle, {
+        headers: {
+          'Content-Type': 'application/fhir+json',
+          'Accept': 'application/fhir+json',
+        },
+      });
+
+      console.log(`Response Status: ${response.status} ${response.statusText}`);
+      console.log('Response Data:', JSON.stringify(response.data, null, 2));
+    } catch (error: any) {
       if (error.response) {
         console.error(`HTTP Error: ${error.response.status} ${error.response.statusText}`);
         console.error('Response Data:', JSON.stringify(error.response.data, null, 2));
@@ -80,8 +120,6 @@ program
 
 program.parse(process.argv);
 
-
-// Gets library info using Regex
 function extractLibraryInfo(content: string) {
   const libraryRegex = /^library\s+(\w+)\s+version\s+'([^']+)'/m;
   const match = content.match(libraryRegex);
@@ -94,34 +132,39 @@ function extractLibraryInfo(content: string) {
   }
 }
 
-// TODO - Update URL stuff 
-function buildFHIRBundle(libraryName: string, version: string, description: any, base64Content: string, ipUrl : string = 'http://localhost:8080/fhir/Library/') {
+function buildFHIRBundle(
+  libraryName: string,
+  version: string,
+  description: any,
+  base64Content: string,
+  baseUrl: string = 'http://localhost:8080/fhir/'
+) {
   const libraryResource = {
-    resourceType: "Library",
+    resourceType: 'Library',
     id: libraryName,
-    url: ipUrl + libraryName,
+    url: `${baseUrl}Library/${libraryName}`,
     version: version,
     name: libraryName,
     title: libraryName,
-    status: "active",
+    status: 'active',
     description: description,
     content: [
       {
-        contentType: "text/cql",
+        contentType: 'text/cql',
         data: base64Content,
       },
     ],
   };
 
   const bundle = {
-    resourceType: "Bundle",
-    type: "transaction",
+    resourceType: 'Bundle',
+    type: 'transaction',
     entry: [
       {
         fullUrl: `urn:uuid:${libraryName}`,
         resource: libraryResource,
         request: {
-          method: "POST",
+          method: 'POST',
           url: `Library/${libraryName}`,
         },
       },
