@@ -1,10 +1,17 @@
 {
-  "name": "cql-cli",
-  "version": "1.0.0",
-  "description": "A helper CLI aimed at supporting CQL (Clinical Quality Language) operations on HAPI-FHIR servers.",
-  "main": "index.ts",
+  "name": "@asushares/cli",
+  "version": "0.1.0",
+  "description": "ASU SHARES CLI aimed at supporting CQL (Clinical Quality Language) operations on HAPI-FHIR servers.",
+  "main": "index.js",
+  "bin": "",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "clean": "rm -rf ./build",
+    "compile": "npx tsc && chmod +x ./build/src/bin/*",
+    "copy-files": "mkdir -p build/assets && cp -R src/assets/ build/src/assets/",
+    "build": "npm run clean && npm run compile && npm run copy-files",
+    "package": "npm run build && npm pack",
+    "test": "jest",
+    "test-watch": "nodemon --watch '{src,test}/**' --ext 'ts,md,json' --exec 'npx jest'"
   },
   "repository": {
     "type": "git",
@@ -32,6 +39,10 @@
     "commander": "^12.1.0"
   },
   "devDependencies": {
-    "@types/node": "^22.8.5"
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.9.0",
+    "nodemon": "^3.1.7",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2"
   }
 }
