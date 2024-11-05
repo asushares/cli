@@ -6,8 +6,8 @@
   "bin": "",
   "scripts": {
     "clean": "rm -rf ./build",
-    "compile": "npx tsc && chmod +x ./build/src/bin/*",
-    "copy-files": "mkdir -p build/assets && cp -R src/assets/ build/src/assets/",
+    "compile": "npx tsc && chmod +x ./build/bin/*",
+    "copy-files": "mkdir -p build/assets && cp -R src/assets/ build/assets/",
     "build": "npm run clean && npm run compile && npm run copy-files",
     "package": "npm run build && npm pack",
     "test": "jest",
@@ -28,7 +28,7 @@
     "FHIR",
     "cql"
   ],
-  "author": "Abhishek Dhadwal",
+  "author": ["Abhishek Dhadwal", "Preston Lee"],
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/AbhishekSinghDhadwal/cql-cli/issues"

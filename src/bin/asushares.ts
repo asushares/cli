@@ -3,8 +3,12 @@
 import { program } from 'commander';
 import fs from 'fs';
 import axios from 'axios';
+import { SharesCliVersion } from '../version';
 
-program
+const shares = program.version(SharesCliVersion.VERSION)
+  .description('CLI tool for managing CQL files as FHIR resources by the ASU SHARES team.');
+
+shares
   .command('convert <filePath> [outputPath]')
   .description('Converts a .cql file to a base64 string')
   .action((filePath, outputPath) => {
@@ -22,7 +26,7 @@ program
     }
   });
 
-program
+shares
   .command('createFHIRBundle <filePath> <outputPath> <description> [ipUrl]')
   .description('Creates a FHIR bundle as a JSON file from an input .cql file')
   .action((filePath, outputPath, description, ipUrl = 'http://localhost:8080/fhir/Library/') => {
@@ -49,7 +53,7 @@ program
     }
   });
 
-program
+shares
   .command('POSTtoHAPI <filePath> <url>')
   .description('Posts a FHIR bundle JSON file to a HAPI-FHIR server')
   .action(async (filePath, url) => {
@@ -78,7 +82,7 @@ program
     }
   });
 
-program
+shares
   .command('CreateAndPOST <filePath> <outputPath> <description> <url>')
   .description('Creates a FHIR bundle from a .cql file and posts it to a specified URL')
   .action(async (filePath, outputPath, description, url) => {
