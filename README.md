@@ -61,3 +61,12 @@ Creates a FHIR bundle from a `.cql` file, saves it as a JSON file, and posts it 
  - commander: Command-line argument parsing.
  - fs: File system operations.
  - axios: Making HTTP requests.
+
+## Attribution
+
+Authors:
+
+- Abhishek Dhadwal
+- Preston Lee
+
+Released under the Apache 2.0 license.

@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "description": "ASU SHARES CLI aimed at supporting CQL (Clinical Quality Language) operations on HAPI-FHIR servers.",
   "main": "index.js",
-  "bin": "",
+  "bin": {
+    "asushares": "./build/bin/asushares"
+  },
   "scripts": {
     "clean": "rm -rf ./build",
     "compile": "npx tsc && chmod +x ./build/bin/*",
@@ -28,7 +30,6 @@
     "FHIR",
     "cql"
   ],
-  "author": ["Abhishek Dhadwal", "Preston Lee"],
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/AbhishekSinghDhadwal/cql-cli/issues"
