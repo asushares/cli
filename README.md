@@ -1,5 +1,5 @@
-# cql-cli
-A helper CLI aimed at supporting CQL (Clinical Quality Language) operations on HAPI-FHIR servers. Uses [Commander](https://www.npmjs.com/package/commander).
+# ASU SHARES CLI
+Command-line utilities aimed at supporting FHIR Consent management and CQL (Clinical Quality Language) operations on FHIR servers. Written and maintained in TypeScript using the [Commander](https://www.npmjs.com/package/commander) library.
 
 ## Commands
 
@@ -16,7 +16,7 @@ Converts a `.cql` file to a base64 encoded string.
   ```
   - If `outputPath` is omitted, it outputs the base64 string to the console.
 
-### 2. `createFHIRBundle <filePath> <outputPath> <description> [ipUrl]`
+### 2. `create-fhir-bundle <filePath> <outputPath> <description> [ipUrl]`
 Creates a FHIR bundle from a `.cql` file and saves it as a JSON file.
 
 - **Arguments:**
@@ -27,22 +27,22 @@ Creates a FHIR bundle from a `.cql` file and saves it as a JSON file.
   
 - **Usage:**
   ```bash
-  ts-node index.ts createFHIRBundle myfile.cql bundle.json "Description of the CQL library"
+  ts-node index.ts create-fhir-bundle myfile.cql bundle.json "Description of the CQL library"
   ```
 
-### 3. `POSTtoHAPI <filePath> <url>`
-Posts a FHIR bundle JSON file to a specified HAPI-FHIR server.
+### 3. `post-fhir <filePath> <url>`
+Posts a FHIR bundle JSON file to a specified FHIR server.
 
 - **Arguments:**
   - `<filePath>`: Path to the JSON file containing the FHIR bundle.
-  - `<url>`: URL of the HAPI-FHIR server.
+  - `<url>`: Base URL of the FHIR server.
 
 - **Usage:**
   ```bash
-  ts-node index.ts POSTtoHAPI bundle.json http://localhost:8080/fhir
+  ts-node index.ts post-fhir bundle.json http://localhost:8080/fhir
   ```
 
-### 4. `CreateAndPOST <filePath> <outputPath> <description> <url>`
+### 4. `create-and-post <filePath> <outputPath> <description> <url>`
 Creates a FHIR bundle from a `.cql` file, saves it as a JSON file, and posts it to a specified URL.
 
 - **Arguments:**
@@ -53,7 +53,7 @@ Creates a FHIR bundle from a `.cql` file, saves it as a JSON file, and posts it 
 
 - **Usage:**
   ```bash
-  ts-node index.ts CreateAndPOST myfile.cql bundle.json "Description of the CQL library" http://localhost:8080/fhir
+  ts-node index.ts create-and-post myfile.cql bundle.json "Description of the CQL library" http://localhost:8080/fhir
   ```
 
 ## Dependencies

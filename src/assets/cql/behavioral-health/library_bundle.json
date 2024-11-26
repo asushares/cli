@@ -1,0 +1,29 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:Label_BehavioralHealth",
+      "resource": {
+        "resourceType": "Library",
+        "id": "Label_BehavioralHealth",
+        "url": "http://localhost:8080/fhir/Library/Label_BehavioralHealth",
+        "version": "1.0.0",
+        "name": "Label_BehavioralHealth",
+        "title": "Label_BehavioralHealth",
+        "status": "active",
+        "description": "BehavioralDataLibrary",
+        "content": [
+          {
+            "contentType": "text/cql",
+            "data": "bGlicmFyeSBMYWJlbF9CZWhhdmlvcmFsSGVhbHRoIHZlcnNpb24gJzEuMC4wJw0KDQp1c2luZyBGSElSIHZlcnNpb24gJzQuMC4xJw0KaW5jbHVkZSBGSElSSGVscGVycyB2ZXJzaW9uICc0LjAuMScgY2FsbGVkIEZISVJIZWxwZXJzDQoNCmNvZGVzeXN0ZW0gIlNOT01FRENUIjogJ2h0dHA6Ly9zbm9tZWQuaW5mby9zY3QnDQpjb2Rlc3lzdGVtICJMT0lOQyI6ICdodHRwOi8vbG9pbmMub3JnJw0KY29kZXN5c3RlbSAiUnhOb3JtIjogJ2h0dHA6Ly93d3cubmxtLm5paC5nb3YvcmVzZWFyY2gvdW1scy9yeG5vcm0nDQoNCmRlZmluZSAiQmVoYXZpb3JhbCBIZWFsdGggQ29uZGl0aW9uIENvZGVzIjoNCiAgew0KICAgIENvZGUgJzEzNzQ2MDA0JyBmcm9tICJTTk9NRURDVCIsICAgLy8gQmlwb2xhciBkaXNvcmRlcg0KICAgIENvZGUgJzY1OTcxMDAwMDUyMTAwJyBmcm9tICJTTk9NRURDVCIsICAgLy8gQWN1dGUgcHN5Y2hvc2lzDQogICAgQ29kZSAnMzU0ODkwMDcnIGZyb20gIlNOT01FRENUIiwgIC8vIE1ham9yIGRlcHJlc3NpdmUgZGlzb3JkZXINCiAgICBDb2RlICc0ODY5NDAwMicgZnJvbSAiU05PTUVEQ1QiLCAgIC8vIEFueGlldHkgZGlzb3JkZXINCiAgICBDb2RlICc2NDcxMDA2JyBmcm9tICJTTk9NRURDVCIgICAvLyBTdWljaWRhbCBpZGVhdGlvbg0KICB9DQoNCmRlZmluZSAiQmVoYXZpb3JhbCBIZWFsdGggTWVkaWNhdGlvbiBDb2RlcyI6DQogIHsNCiAgICBDb2RlICc5NDYxMCcgZnJvbSAiUnhOb3JtIiwgICAvLyBYYW5heCAoYWxwcmF6b2xhbSkNCiAgICBDb2RlICc5MDAxNjknIGZyb20gIlJ4Tm9ybSIsICAgLy8gTGFtb3RyaWdpbmUNCiAgICBDb2RlICcyMTY0NTknIGZyb20gIlJ4Tm9ybSIgICAgLy8gRGVwYWtvdGUgKGRpdmFscHJvZXgpDQogIH0NCg0KZGVmaW5lICJCZWhhdmlvcmFsIEhlYWx0aCBPYnNlcnZhdGlvbiBDb2RlcyI6DQogIHsNCiAgICBDb2RlICcxOTM1OS05JyBmcm9tICJMT0lOQyIgICAgLy8gQ29jYWluZSBbUHJlc2VuY2VdIGluIFVyaW5lIGJ5IFNjcmVlbiBtZXRob2QNCiAgfQ0KDQpkZWZpbmUgQmVoYXZpb3JhbEhlYWx0aENvbmRpdGlvbnM6DQogIFtDb25kaXRpb25dIEMNCiAgICB3aGVyZSBleGlzdHMgKA0KICAgICAgICBDLmNvZGUuY29kaW5nIENjDQogICAgICAgICAgd2hlcmUgQ29kZSB7DQogICAgICAgICAgICBjb2RlOiBDYy5jb2RlLnZhbHVlLA0KICAgICAgICAgICAgc3lzdGVtOiBDYy5zeXN0ZW0udmFsdWUNCiAgICAgICAgICB9IGluICJCZWhhdmlvcmFsIEhlYWx0aCBDb25kaXRpb24gQ29kZXMiDQogICAgICApDQoNCg0KZGVmaW5lIEJlaGF2aW9yYWxIZWFsdGhNZWRpY2F0aW9uczoNCiAgICBbTWVkaWNhdGlvblJlcXVlc3RdIE0NCiAgICB3aGVyZSBNLm1lZGljYXRpb24gaXMgQ29kZWFibGVDb25jZXB0DQogICAgICAgICAgICBhbmQgZXhpc3RzIChNLm1lZGljYXRpb24uY29kaW5nIENjDQogICAgICB3aGVyZSBDb2RlIHsNCiAgICAgICAgICAgIGNvZGU6IENjLmNvZGUudmFsdWUsDQogICAgICAgICAgICBzeXN0ZW06IENjLnN5c3RlbS52YWx1ZQ0KICAgICAgICAgIH0gaW4gIkJlaGF2aW9yYWwgSGVhbHRoIE1lZGljYXRpb24gQ29kZXMiKQ0KDQpkZWZpbmUgQmVoYXZpb3JhbEhlYWx0aE9ic2VydmF0aW9uczoNCiAgICBbT2JzZXJ2YXRpb25dIE8NCiAgICB3aGVyZSBleGlzdHMgKA0KICAgICAgICBPLmNvZGUuY29kaW5nIE9jDQogICAgICAgICAgd2hlcmUgQ29kZSB7DQogICAgICAgICAgICBjb2RlOiBPYy5jb2RlLnZhbHVlLA0KICAgICAgICAgICAgc3lzdGVtOiBPYy5zeXN0ZW0udmFsdWUNCiAgICAgICAgICB9IGluICJCZWhhdmlvcmFsIEhlYWx0aCBPYnNlcnZhdGlvbiBDb2RlcyINCiAgICAgICkNCg0KZGVmaW5lIGZ1bmN0aW9uIEFwcGxpZXNUb1BhdGllbnQoKToNCiAgZXhpc3RzKEJlaGF2aW9yYWxIZWFsdGhDb25kaXRpb25zKQ0KICAgIG9yIGV4aXN0cyhCZWhhdmlvcmFsSGVhbHRoTWVkaWNhdGlvbnMpDQogICAgb3IgZXhpc3RzKEJlaGF2aW9yYWxIZWFsdGhPYnNlcnZhdGlvbnMpDQoNCmRlZmluZSBmdW5jdGlvbiBHZXRCZWhhdmlvcmFsSGVhbHRoSXRlbXMoKToNCiAgQmVoYXZpb3JhbEhlYWx0aENvbmRpdGlvbnMNCiAgICB1bmlvbg0KICBCZWhhdmlvcmFsSGVhbHRoTWVkaWNhdGlvbnMNCiAgICB1bmlvbg0KICBCZWhhdmlvcmFsSGVhbHRoT2JzZXJ2YXRpb25zDQoNCi8vVGVzdGluZyBvbmx5DQpkZWZpbmUgQXBwbGllczoNCiAgQXBwbGllc1RvUGF0aWVudCgpDQoNCmRlZmluZSBHZXRCZWhhdmlvcmFsRGF0YToNCiAgR2V0QmVoYXZpb3JhbEhlYWx0aEl0ZW1zKCk="
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Library/Label_BehavioralHealth"
+      }
+    }
+  ]
+}

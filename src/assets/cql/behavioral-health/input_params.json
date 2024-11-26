@@ -1,0 +1,75 @@
+{
+    "resourceType": "Parameters",
+    "parameter": [
+      {
+        "name": "library",
+        "valueString": "Library/Label_BehavioralHealth"
+      },
+      {
+        "name": "expression",
+        "valueString": "Applies"
+      },
+      {
+        "name": "expression",
+        "valueString": "GetBehavioralData"
+      },
+      {
+        "name": "useServerData",
+        "valueBoolean": false
+      },
+      {
+        "name": "data",
+        "resource": {
+          "resourceType": "Bundle",
+          "type": "collection",
+          "entry": [
+            {
+              "resource": {
+                "resourceType": "Condition",
+                "id": "cond1",
+                "code": {
+                  "coding": [
+                    {
+                      "system": "http://snomed.info/sct",
+                      "code": "13746004",
+                      "display": "Bipolar disorder"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "resource": {
+                "resourceType": "MedicationRequest",
+                "id": "med1",
+                "medicationCodeableConcept": {
+                  "coding": [
+                    {
+                      "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                      "code": "94610",
+                      "display": "Xanax (alprazolam)"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "resource": {
+                "resourceType": "Observation",
+                "id": "obs1",
+                "code": {
+                  "coding": [
+                    {
+                      "system": "http://loinc.org",
+                      "code": "19359-9",
+                      "display": "Cocaine [Presence] in Urine by Screen method"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
