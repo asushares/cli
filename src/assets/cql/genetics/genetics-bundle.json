@@ -1,0 +1,24 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-genetic-risk",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "87759-7",
+              "display": "Genetic disease risk"
+            }
+          ]
+        },
+        "effectiveDateTime": "2024-01-15T10:30:00+00:00",
+        "valueString": "Positive for BRCA1 mutation"
+      }
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import axios from 'axios';
 import { SharesCliVersion } from '../version';
 import path from 'path';
 import { json } from 'stream/consumers';
+import csvParser from 'csv-parser';
 
 let dryRun = false;
 
@@ -161,6 +162,19 @@ shares.command('synthea-upload')
     });
   });
 
+shares
+.command('verify-codes')
+    .description(
+        'Verifies JSON files for relevant codes based on a provided CSV and deletes irrelevant files if the delete flag is set.'
+    )
+    .argument('<fhirPath>', 'Path to the directory containing JSON files')
+    .argument('<csvFilePath>', 'Path to the CSV file containing codes')
+    .option('--delete', 'Delete irrelevant files')
+    .action((fhirPath, csvFilePath, options) => {
+        const {delete: deleteFlag } = options;
+        verifyCodes(fhirPath, csvFilePath, deleteFlag);
+    });
+
 program.parse(process.argv);
 
 async function uploadResources(_paths: string[], directory: string, fhirUrl: string) {
@@ -266,4 +280,78 @@ function buildFHIRBundle(
   };
 
   return bundle;
+}
+
+async function verifyCodes(inputPath: string, inputCsv: string, deleteFlag: boolean) {
+  try
+  {
+    if (!fs.existsSync(inputPath)) {
+        throw new Error(`Input path "${inputPath}" does not exist.`);
+    }
+    if (!fs.existsSync(inputCsv)) {
+        throw new Error(`Input CSV "${inputCsv}" does not exist.`);
+    }
+    const codes = new Set<string>();
+    await new Promise<void>((resolve, reject) => {
+        fs.createReadStream(inputCsv)
+            .pipe(csvParser())
+            .on('data', (row) => {
+                if (!row['Code']) {
+                    reject(new Error('CSV file does not contain a "Code" column.'));
+                }
+                codes.add(row['Code']);
+            })
+            .on('end', resolve)
+            .on('error', reject);
+    });
+    console.log(`Number of codes present in the csv file :- ${codes.size}`)
+
+    let totalFiles = 0;
+    let irrelevantFilesCount = 0;
+    let relevantFilesCount = 0;
+    const deletedFiles: string[] = [];
+
+    const files = fs.readdirSync(inputPath).filter(
+        (file) =>
+            file.endsWith('.json') &&
+            !file.startsWith('practitionerInformation') &&
+            !file.startsWith('hospitalInformation')
+    );
+
+    for (const file of files) {
+        totalFiles++;
+        const filePath = path.join(inputPath, file);
+        const content = fs.readFileSync(filePath, 'utf8');
+        const isRelevant = Array.from(codes).some((code) => content.includes(code));
+
+        if (!isRelevant) {
+            irrelevantFilesCount++;
+            if (deleteFlag) {
+                fs.unlinkSync(filePath);
+                deletedFiles.push(file);
+            }
+        } else {
+            relevantFilesCount++;
+        }
+    }
+    const report = {
+        totalFiles,
+        irrelevantFiles: irrelevantFilesCount,
+        relevantFiles: relevantFilesCount,
+        deletedFiles,
+    };
+
+    const reportPath = path.join(inputPath, 'verify-codes-report.json');
+    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+    console.log('Summary:');
+    console.log(`- Total files searched: ${totalFiles}`);
+    console.log(`- Irrelevant files: ${irrelevantFilesCount}`);
+    console.log(`- Relevant files: ${relevantFilesCount}`);
+    console.log(`- Report generated at: ${reportPath}`);
+} 
+  catch (error) {
+  if (error instanceof Error) {
+    console.error(`Error: ${error.message}`);
+    }
+  }
 }

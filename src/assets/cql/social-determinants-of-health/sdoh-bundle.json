@@ -1,0 +1,23 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-food-insecurity",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "LP264604-2",
+              "display": "Food insecurity"
+            }
+          ]
+        },
+        "effectiveDateTime": "2024-01-15T10:30:00+00:00"
+      }
+    }
+  ]
+}

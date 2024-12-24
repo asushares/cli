@@ -36,7 +36,8 @@
   "homepage": "https://github.com/asushares/cli#README",
   "dependencies": {
     "axios": "^1.7.7",
-    "commander": "^12.1.0"
+    "commander": "^12.1.0",
+    "csv-parser": "^3.0.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
