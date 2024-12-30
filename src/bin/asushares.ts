@@ -7,6 +7,9 @@ import { SharesCliVersion } from '../version';
 import path from 'path';
 import { json } from 'stream/consumers';
 import csvParser from 'csv-parser';
+import { performance } from 'perf_hooks';
+import Progress from 'ts-progress';
+
 
 let dryRun = false;
 
@@ -282,76 +285,142 @@ function buildFHIRBundle(
   return bundle;
 }
 
+// Interfaces generated for mapping functions
+interface CodeSystemMapping {
+  [key: string]: string;
+}
+
+interface Instance {
+  code: string;
+  system: string;
+  lineNumber: number;
+}
+
+interface FileInstance {
+  file: string;
+  instances: Instance[];
+}
+
+// Maps code formats in CSV to the formats present in FHIR bundles
+const codeSystemMapping: CodeSystemMapping = {
+  "SNOMED-CT": "http://snomed.info/sct",
+  "LOINC": "http://loinc.org",
+  "RxNorm": "http://www.nlm.nih.gov/research/umls/rxnorm",
+};
+
+async function parseCSV(filePath: string): Promise<Set<[string, string]>> {
+  return new Promise((resolve, reject) => {
+      const codes = new Set<[string, string]>();
+      fs.createReadStream(filePath)
+          .pipe(csvParser())
+          .on('data', (row) => {
+              if (row.Code && row.Code_Type && codeSystemMapping[row.Code_Type]) {
+                  codes.add([row.Code, codeSystemMapping[row.Code_Type]]);
+              }
+          })
+          .on('end', () => resolve(codes))
+          .on('error', reject);
+  });
+}
+
+// TODO - Add option for custom paths for generated reports.
 async function verifyCodes(inputPath: string, inputCsv: string, deleteFlag: boolean) {
-  try
-  {
-    if (!fs.existsSync(inputPath)) {
-        throw new Error(`Input path "${inputPath}" does not exist.`);
-    }
-    if (!fs.existsSync(inputCsv)) {
-        throw new Error(`Input CSV "${inputCsv}" does not exist.`);
-    }
-    const codes = new Set<string>();
-    await new Promise<void>((resolve, reject) => {
-        fs.createReadStream(inputCsv)
-            .pipe(csvParser())
-            .on('data', (row) => {
-                if (!row['Code']) {
-                    reject(new Error('CSV file does not contain a "Code" column.'));
-                }
-                codes.add(row['Code']);
-            })
-            .on('end', resolve)
-            .on('error', reject);
-    });
-    console.log(`Number of codes present in the csv file :- ${codes.size}`)
+  try {
+      const codes = await parseCSV(inputCsv);
+      // Other than non json files, selection ignores practitioner and hospital information
+      const totalFiles = fs.readdirSync(inputPath).filter(
+          (file) =>
+              file.endsWith('.json') &&
+              !file.startsWith('practitionerInformation') &&
+              !file.startsWith('hospitalInformation')
+      );
 
-    let totalFiles = 0;
-    let irrelevantFilesCount = 0;
-    let relevantFilesCount = 0;
-    const deletedFiles: string[] = [];
+      let relevantFiles = 0;
+      let irrelevantFiles = 0;
+      const deletedFiles: string[] = [];
+      const textSearchInstances: FileInstance[] = [];
+      const progressBar = Progress.create({
+          total: totalFiles.length,
+          pattern: 'Progress: {bar} | {current}/{total} Files | Elapsed: {elapsed}s | {percent}%',
+          textColor: 'green',
+      });
 
-    const files = fs.readdirSync(inputPath).filter(
-        (file) =>
-            file.endsWith('.json') &&
-            !file.startsWith('practitionerInformation') &&
-            !file.startsWith('hospitalInformation')
-    );
+      const startTime = performance.now();
 
-    for (const file of files) {
-        totalFiles++;
-        const filePath = path.join(inputPath, file);
-        const content = fs.readFileSync(filePath, 'utf8');
-        const isRelevant = Array.from(codes).some((code) => content.includes(code));
+      for (const [index, filename] of totalFiles.entries()) {
+          const filePath = path.join(inputPath, filename);
+          const lines = fs.readFileSync(filePath, 'utf-8').split('\n');
 
-        if (!isRelevant) {
-            irrelevantFilesCount++;
-            if (deleteFlag) {
-                fs.unlinkSync(filePath);
-                deletedFiles.push(file);
-            }
-        } else {
-            relevantFilesCount++;
-        }
-    }
-    const report = {
-        totalFiles,
-        irrelevantFiles: irrelevantFilesCount,
-        relevantFiles: relevantFilesCount,
-        deletedFiles,
-    };
+          let found = false;
+          const instances: Instance[] = [];
 
-    const reportPath = path.join(inputPath, 'verify-codes-report.json');
-    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
-    console.log('Summary:');
-    console.log(`- Total files searched: ${totalFiles}`);
-    console.log(`- Irrelevant files: ${irrelevantFilesCount}`);
-    console.log(`- Relevant files: ${relevantFilesCount}`);
-    console.log(`- Report generated at: ${reportPath}`);
-} 
-  catch (error) {
-  if (error instanceof Error) {
-    console.error(`Error: ${error.message}`);
-    }
+          lines.forEach((line, lineIndex) => {
+              codes.forEach(([code, system]) => {
+                  if (line.includes(code)) {
+                      const above = lineIndex > 0 ? lines[lineIndex - 1] : '';
+                      const below = lineIndex < lines.length - 1 ? lines[lineIndex + 1] : '';
+
+                      if (above.includes(system) || below.includes(system)) {
+                          instances.push({
+                              code,
+                              system,
+                              lineNumber: lineIndex + 1,
+                          });
+                          found = true;
+                      }
+                  }
+              });
+          });
+
+          if (instances.length > 0) {
+              textSearchInstances.push({
+                  file: filename,
+                  instances,
+              });
+          }
+
+          if (found) {
+              relevantFiles++;
+          } else {
+              irrelevantFiles++;
+              if (deleteFlag) {
+                  fs.unlinkSync(filePath);
+                  deletedFiles.push(filename);
+              }
+          }
+          progressBar.update();
+      }
+
+      progressBar.done();
+      const endTime = performance.now();
+      const totalTime = ((endTime - startTime) / 1000).toFixed(2);
+
+      const report = {
+          totalFiles: totalFiles.length,
+          relevantFiles,
+          irrelevantFiles,
+          deletedFiles,
+          textSearchInstances,
+          totalTime: `${totalTime} seconds`,
+      };
+
+      const reportPath = path.join(inputPath, 'verification_report.json');
+      fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+
+      console.log('Verification complete:');
+      console.log(`  Total files processed: ${totalFiles.length}`);
+      console.log(`  Relevant files: ${relevantFiles}`);
+      console.log(`  Irrelevant files: ${irrelevantFiles}`);
+      if (deleteFlag) {
+          console.log(`  Files deleted: ${deletedFiles.length}`);
+      }
+      console.log(`  Total time: ${totalTime} seconds`);
+      console.log(`  Report saved to: ${reportPath}`);
+  } catch (error) {
+      if (error instanceof Error) {
+          console.error(`Error: ${error.message}`);
+      }
   }
 }
+
+
