@@ -177,7 +177,7 @@ shares.command('simulate-consent-cds')
 	.argument('<confidenceThreshold>', 'Confidence threshold for the simulator')
 	.argument('<fhirBaseUrl>', 'URL of the FHIR server from which to fetch Consent documents')
 	.argument('<consentId>', 'Identifier of a Consent resource to simulate')
-	.argument('<bundleDirectory>', 'Local arbitrary JSON FHIR Bundle file to use as patient record content')
+	.argument('<bundleDirectory>', 'Local arbitrary directory of JSON FHIR Bundle files to use as patient record content. Each Bundle must contain a Patient resource.')
 	.argument('<outputDirectory>', 'Directory in which to write simulator output')
 	.action((cdsBaseUrl, confidenceThreshold, fhirBaseUrl, consentId, bundleDirectory, outputDirectory, options) => {
 		fs.readdirSync(bundleDirectory).forEach((file) => {
