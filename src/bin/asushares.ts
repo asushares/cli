@@ -243,7 +243,7 @@ function simulateConsent(cdsBaseUrl: string, confidenceThreshold: number, consen
 		fs.writeFileSync(csvPath, data);
 		console.log(`CSV data written to ${csvPath}`);
 		} else {
-			console.warn(`No patient ID found in data file. Not writing CSV data.`);
+			console.warn(`No patient ID found in data file. Not writing CSV data for this file.`);
 		}
 	}).catch((error) => {
 		console.error(`Error simulating Consent resource:`, error);
