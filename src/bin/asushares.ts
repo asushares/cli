@@ -1,269 +1,318 @@
 #!/usr/bin/env node
 
-import { program } from 'commander';
 import fs from 'fs';
-import axios from 'axios';
-import { SharesCliVersion } from '../version';
 import path from 'path';
-import { json } from 'stream/consumers';
+
+import { program } from 'commander';
+import axios from 'axios';
+
+import { SharesCliVersion } from '../version';
+import { Bundle, Consent } from 'fhir/r5';
+import { RemoteCdsResourceLabeler } from '../simulator/remote_cds_resource_labler';
+import { ConsentCategorySettings, ConsoleDataSharingEngine, DummyRuleProvider } from '@asushares/core';
 
 let dryRun = false;
 
 const shares = program.version(SharesCliVersion.VERSION)
-  .description('CLI tool for managing CQL files as FHIR resources by the ASU SHARES team.');
+	.description('CLI tool for managing CQL files as FHIR resources by the ASU SHARES team.');
 
 shares
-  .command('convert <filePath> [outputPath]')
-  .description('Converts a .cql file to a base64 string')
-  .action((filePath, outputPath) => {
-    try {
-      const content = fs.readFileSync(filePath);
-      const base64Content = content.toString('base64');
-      if (outputPath) {
-        fs.writeFileSync(outputPath, base64Content);
-        console.log(`Base64 content written to ${outputPath}`);
-      } else {
-        console.log(base64Content);
-      }
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
-    }
-  });
+	.command('convert <filePath> [outputPath]')
+	.description('Converts a .cql file to a base64 string')
+	.action((filePath, outputPath) => {
+		try {
+			const content = fs.readFileSync(filePath);
+			const base64Content = content.toString('base64');
+			if (outputPath) {
+				fs.writeFileSync(outputPath, base64Content);
+				console.log(`Base64 content written to ${outputPath}`);
+			} else {
+				console.log(base64Content);
+			}
+		} catch (error: any) {
+			console.error(`Error: ${error.message}`);
+		}
+	});
 
 shares
-  .command('create-fhir-bundle <filePath> <outputPath> <description> [ipUrl]')
-  .description('Creates a FHIR bundle as a JSON file from an input .cql file')
-  .action((filePath, outputPath, description, ipUrl = 'http://localhost:8080/fhir/') => {
-    try {
-      const content = fs.readFileSync(filePath, 'utf8');
-      // Extract library name and version from the content using regex
-      const libraryInfo = extractLibraryInfo(content);
-      if (!libraryInfo) {
-        console.error('Could not extract library name and version from the .cql file.');
-        process.exit(1);
-      }
-      const { libraryName, version } = libraryInfo;
+	.command('create-fhir-bundle <filePath> <outputPath> <description> [ipUrl]')
+	.description('Creates a FHIR bundle as a JSON file from an input .cql file')
+	.action((filePath, outputPath, description, ipUrl = 'http://localhost:8080/fhir/') => {
+		try {
+			const content = fs.readFileSync(filePath, 'utf8');
+			// Extract library name and version from the content using regex
+			const libraryInfo = extractLibraryInfo(content);
+			if (!libraryInfo) {
+				console.error('Could not extract library name and version from the .cql file.');
+				process.exit(1);
+			}
+			const { libraryName, version } = libraryInfo;
 
-      const base64Content = Buffer.from(content).toString('base64');
+			const base64Content = Buffer.from(content).toString('base64');
 
-      // Build the FHIR bundle JSON
-      const fhirBundle = buildFHIRBundle(libraryName, version, description, base64Content, ipUrl);
+			// Build the FHIR bundle JSON
+			const fhirBundle = buildFHIRBundle(libraryName, version, description, base64Content, ipUrl);
 
-      // Write the FHIR bundle JSON to outputPath
-      fs.writeFileSync(outputPath, JSON.stringify(fhirBundle, null, 2));
-      console.log(`FHIR bundle written to ${outputPath}`);
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
-    }
-  });
-
-shares
-  .command('post-fhir <filePath> <url>')
-  .description('Posts a FHIR bundle JSON file to a FHIR server')
-  .action(async (filePath, url) => {
-    try {
-      // Read the FHIR bundle JSON file
-      const bundleContent = fs.readFileSync(filePath, 'utf8');
-      const bundleJson = JSON.parse(bundleContent);
-
-      // Perform POST request
-      const response = await axios.post(url, bundleJson, {
-        headers: {
-          'Content-Type': 'application/fhir+json',
-          'Accept': 'application/fhir+json',
-        },
-      });
-
-      console.log(`Response Status: ${response.status} ${response.statusText}`);
-      console.log('Response Data:', JSON.stringify(response.data, null, 2));
-    } catch (error: any) {
-      if (error.response) {
-        console.error(`HTTP Error: ${error.response.status} ${error.response.statusText}`);
-        console.error('Response Data:', JSON.stringify(error.response.data, null, 2));
-      } else {
-        console.error(`Error: ${error.message}`);
-      }
-    }
-  });
+			// Write the FHIR bundle JSON to outputPath
+			fs.writeFileSync(outputPath, JSON.stringify(fhirBundle, null, 2));
+			console.log(`FHIR bundle written to ${outputPath}`);
+		} catch (error: any) {
+			console.error(`Error: ${error.message}`);
+		}
+	});
 
 shares
-  .command('create-and-post <filePath> <outputPath> <description> <url>')
-  .description('Creates a FHIR bundle from a .cql file and posts it to a specified URL')
-  .action(async (filePath, outputPath, description, url) => {
-    try {
-      const content = fs.readFileSync(filePath, 'utf8');
+	.command('post-fhir <filePath> <url>')
+	.description('Posts a FHIR bundle JSON file to a FHIR server')
+	.action(async (filePath, url) => {
+		try {
+			// Read the FHIR bundle JSON file
+			const bundleContent = fs.readFileSync(filePath, 'utf8');
+			const bundleJson = JSON.parse(bundleContent);
 
-      const libraryInfo = extractLibraryInfo(content);
-      if (!libraryInfo) {
-        console.error('Could not extract library name and version from the .cql file.');
-        process.exit(1);
-      }
-      const { libraryName, version } = libraryInfo;
-      const base64Content = Buffer.from(content).toString('base64');
+			// Perform POST request
+			const response = await axios.post(url, bundleJson, {
+				headers: {
+					'Content-Type': 'application/fhir+json',
+					'Accept': 'application/fhir+json',
+				},
+			});
 
-      const baseUrl = url.endsWith('/') ? url : url + '/';
-      const fhirBundle = buildFHIRBundle(libraryName, version, description, base64Content, baseUrl);
+			console.log(`Response Status: ${response.status} ${response.statusText}`);
+			console.log('Response Data:', JSON.stringify(response.data, null, 2));
+		} catch (error: any) {
+			if (error.response) {
+				console.error(`HTTP Error: ${error.response.status} ${error.response.statusText}`);
+				console.error('Response Data:', JSON.stringify(error.response.data, null, 2));
+			} else {
+				console.error(`Error: ${error.message}`);
+			}
+		}
+	});
 
-      fs.writeFileSync(outputPath, JSON.stringify(fhirBundle, null, 2));
-      console.log(`FHIR bundle written to ${outputPath}`);
+shares
+	.command('create-and-post <filePath> <outputPath> <description> <url>')
+	.description('Creates a FHIR bundle from a .cql file and posts it to a specified URL')
+	.action(async (filePath, outputPath, description, url) => {
+		try {
+			const content = fs.readFileSync(filePath, 'utf8');
 
-      const response = await axios.post(baseUrl, fhirBundle, {
-        headers: {
-          'Content-Type': 'application/fhir+json',
-          'Accept': 'application/fhir+json',
-        },
-      });
+			const libraryInfo = extractLibraryInfo(content);
+			if (!libraryInfo) {
+				console.error('Could not extract library name and version from the .cql file.');
+				process.exit(1);
+			}
+			const { libraryName, version } = libraryInfo;
+			const base64Content = Buffer.from(content).toString('base64');
 
-      console.log(`Response Status: ${response.status} ${response.statusText}`);
-      console.log('Response Data:', JSON.stringify(response.data, null, 2));
-    } catch (error: any) {
-      if (error.response) {
-        console.error(`HTTP Error: ${error.response.status} ${error.response.statusText}`);
-        console.error('Response Data:', JSON.stringify(error.response.data, null, 2));
-      } else {
-        console.error(`Error: ${error.message}`);
-      }
-    }
-  });
+			const baseUrl = url.endsWith('/') ? url : url + '/';
+			const fhirBundle = buildFHIRBundle(libraryName, version, description, base64Content, baseUrl);
+
+			fs.writeFileSync(outputPath, JSON.stringify(fhirBundle, null, 2));
+			console.log(`FHIR bundle written to ${outputPath}`);
+
+			const response = await axios.post(baseUrl, fhirBundle, {
+				headers: {
+					'Content-Type': 'application/fhir+json',
+					'Accept': 'application/fhir+json',
+				},
+			});
+
+			console.log(`Response Status: ${response.status} ${response.statusText}`);
+			console.log('Response Data:', JSON.stringify(response.data, null, 2));
+		} catch (error: any) {
+			if (error.response) {
+				console.error(`HTTP Error: ${error.response.status} ${error.response.statusText}`);
+				console.error('Response Data:', JSON.stringify(error.response.data, null, 2));
+			} else {
+				console.error(`Error: ${error.message}`);
+			}
+		}
+	});
 
 shares.command('synthea-upload')
-  .description('Upload a directory of Synthea-generated FHIR resources to a FHIR URL using Synthea file naming conventions and loading order.')
-  .argument('<directory>', 'Directory with Synthea-generate "fhir" resource files')
-  .argument('<url>', 'URL of the FHIR server to upload the resources to')
-  .option('-d, --dry-run', 'Perform a dry run without uploading any resources')
-  .action((directory, fhirUrl, options) => {
-    dryRun = options.dryRun;
-    if (dryRun) {
-      console.log('Dry run enabled. No resources will be uploaded.');
-    }
-    const sDirectory = safeFliePathFor(directory);
-    console.log(`Uploading Synthea-generated FHIR resources from ${sDirectory} to ${fhirUrl}`);
-    const files = fs.readdirSync(sDirectory).filter(file => path.extname(file).toLowerCase() === '.json');
-    const hospitals: string[] = [];
-    const pratitioners: string[] = [];
-    const patients: string[] = [];
-    files.forEach((file, i) => {
-      if (file.startsWith('hospitalInformation')) {
-        hospitals.push(file);
-      } else if (file.startsWith('practitionerInformation')) {
-        pratitioners.push(file);
-      } else {
-        patients.push(file);
-      }
-    });
-    // const sFiles = files.map((file) => path.join(sDirectory, file));
-    uploadResources(hospitals, sDirectory, fhirUrl).then(() => {
-      uploadResources(pratitioners, sDirectory, fhirUrl).then(() => {
-        uploadResources(patients, sDirectory, fhirUrl).then(() => {
-          console.log('Done');
-        });
-      });
-    });
-  });
+	.description('Upload a directory of Synthea-generated FHIR resources to a FHIR URL using Synthea file naming conventions and loading order.')
+	.argument('<directory>', 'Directory with Synthea-generate "fhir" resource files')
+	.argument('<url>', 'URL of the FHIR server to upload the resources to')
+	.option('-d, --dry-run', 'Perform a dry run without uploading any resources')
+	.action((directory, fhirUrl, options) => {
+		dryRun = options.dryRun;
+		if (dryRun) {
+			console.log('Dry run enabled. No resources will be uploaded.');
+		}
+		const sDirectory = safeFilePathFor(directory);
+		console.log(`Uploading Synthea-generated FHIR resources from ${sDirectory} to ${fhirUrl}`);
+		const files = fs.readdirSync(sDirectory).filter(file => path.extname(file).toLowerCase() === '.json');
+		const hospitals: string[] = [];
+		const pratitioners: string[] = [];
+		const patients: string[] = [];
+		files.forEach((file, i) => {
+			if (file.startsWith('hospitalInformation')) {
+				hospitals.push(file);
+			} else if (file.startsWith('practitionerInformation')) {
+				pratitioners.push(file);
+			} else {
+				patients.push(file);
+			}
+		});
+		// const sFiles = files.map((file) => path.join(sDirectory, file));
+		uploadResources(hospitals, sDirectory, fhirUrl).then(() => {
+			uploadResources(pratitioners, sDirectory, fhirUrl).then(() => {
+				uploadResources(patients, sDirectory, fhirUrl).then(() => {
+					console.log('Done');
+				});
+			});
+		});
+	});
+
+shares.command('simulate-consent-cds')
+	.description('Headless consent simulator')
+	.argument('<cdsBaseUrl>', 'URL of the FHIR server from which to fetch Consent documents')
+	.argument('<confidenceThreshold>', 'Confidence threshold for the simulator')
+	.argument('<fhirBaseUrl>', 'URL of the FHIR server from which to fetch Consent documents')
+	.argument('<consentId>', 'Identifier of a Consent resource to simulate')
+	.argument('<bundleFile>', 'Local arbitrary JSON FHIR Bundle file to use as patient record content')
+	.argument('<outputDirectory>', 'Directory in which to write simulator output')
+	.action((cdsBaseUrl, confidenceThreshold, fhirBaseUrl, consentId, bundleFile, outputDirectory, options) => {
+		const sBundleFile = safeFilePathFor(bundleFile);
+		const url = `${fhirBaseUrl}/Consent/${consentId}`;
+		axios.get(url, { headers: { 'Accept': 'application/fhir+json' } }).then((response) => {
+			const consent = response.data as Consent;
+			const sOutputDirectory = safeFilePathFor(outputDirectory);
+
+			const json: Bundle = JSON.parse(fs.readFileSync(sBundleFile).toString());
+			simulateConsent(cdsBaseUrl, confidenceThreshold, consent, json, sOutputDirectory);
+		}).catch((error) => {
+			console.error(`Error fetching Consent resource:`, error);
+		});
+	});
 
 program.parse(process.argv);
 
+function simulateConsent(cdsBaseUrl: string, confidenceThreshold: number, consent: Consent, bundle: Bundle, outputDirectory: string) {
+	const labeler = new RemoteCdsResourceLabeler(consent, bundle, cdsBaseUrl, confidenceThreshold);
+	console.log(`Simulating Consent/${consent.id} from server with local Bundle of ${bundle.entry?.length} resources`);
+
+	const ruleProvider = new DummyRuleProvider();
+	const engine = new ConsoleDataSharingEngine(ruleProvider, confidenceThreshold, false);
+	const sharingContextSettings = new ConsentCategorySettings();
+	sharingContextSettings.treatment.enabled = true;
+	sharingContextSettings.research.enabled = true;
+
+	labeler.recomputeLabels().then(() => {
+		// simulator.recomputeConsentDecisions();
+		console.log('Simulation complete');
+		const decisions = engine.computeConsentDecisionsForResources(labeler.labeledResources, consent, sharingContextSettings);
+		let data = engine.exportDecisionsForCsv(sharingContextSettings, labeler.labeledResources, decisions);
+		const csvPath = path.join(outputDirectory, `consent-${consent.id}-simulation.csv`);
+		fs.writeFileSync(csvPath, data);
+		console.log(`CSV data written to ${csvPath}`);
+	}).catch((error) => {
+		console.error(`Error simulating Consent resource:`, error);
+	});
+}
+
 async function uploadResources(_paths: string[], directory: string, fhirUrl: string) {
-  let next = _paths.shift();
-  if (next) {
-    await uploadResource(next, directory, fhirUrl);
-    if (_paths.length > 0) {
-      await uploadResources(_paths, directory, fhirUrl);
-    }
-  }
+	let next = _paths.shift();
+	if (next) {
+		await uploadResource(next, directory, fhirUrl);
+		if (_paths.length > 0) {
+			await uploadResources(_paths, directory, fhirUrl);
+		}
+	}
 }
 
 async function uploadResource(fileName: string, directory: string, fhirUrl: string) {
-  const file = path.join(directory, fileName);
-  const raw = fs.readFileSync(file).toString();
-  const json = JSON.parse(raw) as any;
-  // console.log(json);
+	const file = path.join(directory, fileName);
+	const raw = fs.readFileSync(file).toString();
+	const json = JSON.parse(raw) as any;
+	// console.log(json);
 
-  if (dryRun) {
-    return new Promise<void>((resolve, reject) => {
-      console.log(`Dry run: Would have uploaded ${fileName}`);
-      resolve();
+	if (dryRun) {
+		return new Promise<void>((resolve, reject) => {
+			console.log(`Dry run: Would have uploaded ${fileName}`);
+			resolve();
 
-    });
-  } else {
-    return axios.post(fhirUrl, json, {
-      headers: {
-        'Content-Type': 'application/fhir+json',
-        'Accept': 'application/fhir+json',
-      },
-    }).then((response) => {
-      console.log(`[SUCCESS]: ${response.status} ${response.statusText}`, file);
-      // console.log('Response Data:', JSON.stringify(response.data, null, 2));
-    }).catch((error) => {
-      if (error.response) {
-        console.error(`[FAILURE]: ${error.response.status} ${error.response.statusText}`, file);
-        console.error(JSON.stringify(error.response.data, null, 2));
-      } else {
-        console.error(`[ERROR]: ${error.message}`, file);
-      }
-    });
-  }
+		});
+	} else {
+		return axios.post(fhirUrl, json, {
+			headers: {
+				'Content-Type': 'application/fhir+json',
+				'Accept': 'application/fhir+json',
+			},
+		}).then((response) => {
+			console.log(`[SUCCESS]: ${response.status} ${response.statusText}`, file);
+			// console.log('Response Data:', JSON.stringify(response.data, null, 2));
+		}).catch((error) => {
+			if (error.response) {
+				console.error(`[FAILURE]: ${error.response.status} ${error.response.statusText}`, file);
+				console.error(JSON.stringify(error.response.data, null, 2));
+			} else {
+				console.error(`[ERROR]: ${error.message}`, file);
+			}
+		});
+	}
 }
 
-function safeFliePathFor(fileName: string) {
-  let safePath = fileName;
-  if (!path.isAbsolute(fileName)) {
-    safePath = path.join(process.cwd(), fileName);
-  }
-  console.debug(`Safe path: ${safePath}`);
-  return safePath;
+function safeFilePathFor(fileName: string) {
+	let safePath = fileName;
+	if (!path.isAbsolute(fileName)) {
+		safePath = path.join(process.cwd(), fileName);
+	}
+	console.debug(`Safe path: ${safePath}`);
+	return safePath;
 }
 
 function extractLibraryInfo(content: string) {
-  const libraryRegex = /^library\s+(\w+)\s+version\s+'([^']+)'/m;
-  const match = content.match(libraryRegex);
-  if (match) {
-    const libraryName = match[1];
-    const version = match[2];
-    return { libraryName, version };
-  } else {
-    return null;
-  }
+	const libraryRegex = /^library\s+(\w+)\s+version\s+'([^']+)'/m;
+	const match = content.match(libraryRegex);
+	if (match) {
+		const libraryName = match[1];
+		const version = match[2];
+		return { libraryName, version };
+	} else {
+		return null;
+	}
 }
 
 function buildFHIRBundle(
-  libraryName: string,
-  version: string,
-  description: any,
-  base64Content: string,
-  baseUrl: string = 'http://localhost:8080/fhir/'
+	libraryName: string,
+	version: string,
+	description: any,
+	base64Content: string,
+	baseUrl: string = 'http://localhost:8080/fhir/'
 ) {
-  const libraryResource = {
-    resourceType: 'Library',
-    id: libraryName,
-    url: `${baseUrl}Library/${libraryName}`,
-    version: version,
-    name: libraryName,
-    title: libraryName,
-    status: 'active',
-    description: description,
-    content: [
-      {
-        contentType: 'text/cql',
-        data: base64Content,
-      },
-    ],
-  };
+	const libraryResource = {
+		resourceType: 'Library',
+		id: libraryName,
+		url: `${baseUrl}Library / ${libraryName}`,
+		version: version,
+		name: libraryName,
+		title: libraryName,
+		status: 'active',
+		description: description,
+		content: [
+			{
+				contentType: 'text/cql',
+				data: base64Content,
+			},
+		],
+	};
 
-  const bundle = {
-    resourceType: 'Bundle',
-    type: 'transaction',
-    entry: [
-      {
-        fullUrl: `urn:uuid:${libraryName}`,
-        resource: libraryResource,
-        request: {
-          method: 'POST',
-          url: `Library/${libraryName}`,
-        },
-      },
-    ],
-  };
+	const bundle = {
+		resourceType: 'Bundle',
+		type: 'transaction',
+		entry: [
+			{
+				fullUrl: `urn: uuid: ${libraryName}`,
+				resource: libraryResource,
+				request: {
+					method: 'POST',
+					url: `Library / ${libraryName}`,
+				},
+			},
+		],
+	};
 
-  return bundle;
+	return bundle;
 }
