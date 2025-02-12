@@ -11,6 +11,13 @@ import { Bundle, Consent } from 'fhir/r5';
 import { RemoteCdsResourceLabeler } from '../simulator/remote_cds_resource_labler';
 import { ConsentCategorySettings, ConsoleDataSharingEngine, DummyRuleProvider } from '@asushares/core';
 
+import { json } from 'stream/consumers';
+import csvParser from 'csv-parser';
+import { performance } from 'perf_hooks';
+import Progress from 'ts-progress';
+
+
+
 let dryRun = false;
 
 const shares = program.version(SharesCliVersion.VERSION)
@@ -187,6 +194,19 @@ shares.command('simulate-consent-cds')
 		});
 	});
 
+shares
+.command('verify-codes')
+    .description(
+        'Verifies JSON files for relevant codes based on a provided CSV and deletes irrelevant files if the delete flag is set.'
+    )
+    .argument('<fhirPath>', 'Path to the directory containing JSON files')
+    .argument('<csvFilePath>', 'Path to the CSV file containing codes')
+    .option('--delete', 'Delete irrelevant files')
+    .action((fhirPath, csvFilePath, options) => {
+        const {delete: deleteFlag } = options;
+        verifyCodes(fhirPath, csvFilePath, deleteFlag);
+    });
+
 program.parse(process.argv);
 
 function simulateConsent(cdsBaseUrl: string, confidenceThreshold: number, consent: Consent, bundle: Bundle, outputDirectory: string) {
@@ -316,3 +336,143 @@ function buildFHIRBundle(
 
 	return bundle;
 }
+
+// Interfaces generated for mapping functions
+interface CodeSystemMapping {
+  [key: string]: string;
+}
+
+interface Instance {
+  code: string;
+  system: string;
+  lineNumber: number;
+}
+
+interface FileInstance {
+  file: string;
+  instances: Instance[];
+}
+
+// Maps code formats in CSV to the formats present in FHIR bundles
+const codeSystemMapping: CodeSystemMapping = {
+  "SNOMED-CT": "http://snomed.info/sct",
+  "LOINC": "http://loinc.org",
+  "RxNorm": "http://www.nlm.nih.gov/research/umls/rxnorm",
+};
+
+async function parseCSV(filePath: string): Promise<Set<[string, string]>> {
+  return new Promise((resolve, reject) => {
+      const codes = new Set<[string, string]>();
+      fs.createReadStream(filePath)
+          .pipe(csvParser())
+          .on('data', (row) => {
+              if (row.Code && row.Code_Type && codeSystemMapping[row.Code_Type]) {
+                  codes.add([row.Code, codeSystemMapping[row.Code_Type]]);
+              }
+          })
+          .on('end', () => resolve(codes))
+          .on('error', reject);
+  });
+}
+
+// TODO - Add option for custom paths for generated reports.
+async function verifyCodes(inputPath: string, inputCsv: string, deleteFlag: boolean) {
+  try {
+      const codes = await parseCSV(inputCsv);
+      // Other than non json files, selection ignores practitioner and hospital information
+      const totalFiles = fs.readdirSync(inputPath).filter(
+          (file) =>
+              file.endsWith('.json') &&
+              !file.startsWith('practitionerInformation') &&
+              !file.startsWith('hospitalInformation')
+      );
+
+      let relevantFiles = 0;
+      let irrelevantFiles = 0;
+      const deletedFiles: string[] = [];
+      const textSearchInstances: FileInstance[] = [];
+      const progressBar = Progress.create({
+          total: totalFiles.length,
+          pattern: 'Progress: {bar} | {current}/{total} Files | Elapsed: {elapsed}s | {percent}%',
+          textColor: 'green',
+      });
+
+      const startTime = performance.now();
+
+      for (const [index, filename] of totalFiles.entries()) {
+          const filePath = path.join(inputPath, filename);
+          const lines = fs.readFileSync(filePath, 'utf-8').split('\n');
+
+          let found = false;
+          const instances: Instance[] = [];
+
+          lines.forEach((line, lineIndex) => {
+              codes.forEach(([code, system]) => {
+                  if (line.includes(code)) {
+                      const above = lineIndex > 0 ? lines[lineIndex - 1] : '';
+                      const below = lineIndex < lines.length - 1 ? lines[lineIndex + 1] : '';
+
+                      if (above.includes(system) || below.includes(system)) {
+                          instances.push({
+                              code,
+                              system,
+                              lineNumber: lineIndex + 1,
+                          });
+                          found = true;
+                      }
+                  }
+              });
+          });
+
+          if (instances.length > 0) {
+              textSearchInstances.push({
+                  file: filename,
+                  instances,
+              });
+          }
+
+          if (found) {
+              relevantFiles++;
+          } else {
+              irrelevantFiles++;
+              if (deleteFlag) {
+                  fs.unlinkSync(filePath);
+                  deletedFiles.push(filename);
+              }
+          }
+          progressBar.update();
+      }
+
+      progressBar.done();
+      const endTime = performance.now();
+      const totalTime = ((endTime - startTime) / 1000).toFixed(2);
+
+      const report = {
+          totalFiles: totalFiles.length,
+          relevantFiles,
+          irrelevantFiles,
+          deletedFiles,
+          textSearchInstances,
+          totalTime: `${totalTime} seconds`,
+      };
+
+      const reportPath = path.join(inputPath, 'verification_report.json');
+      fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+
+      console.log('Verification complete:');
+      console.log(`  Total files processed: ${totalFiles.length}`);
+      console.log(`  Relevant files: ${relevantFiles}`);
+      console.log(`  Irrelevant files: ${irrelevantFiles}`);
+      if (deleteFlag) {
+          console.log(`  Files deleted: ${deletedFiles.length}`);
+      }
+      console.log(`  Total time: ${totalTime} seconds`);
+      console.log(`  Report saved to: ${reportPath}`);
+  } catch (error) {
+      if (error instanceof Error) {
+          console.error(`Error: ${error.message}`);
+      }
+  }
+}
+
+
