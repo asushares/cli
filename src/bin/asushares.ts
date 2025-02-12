@@ -8,10 +8,9 @@ import axios from 'axios';
 
 import { SharesCliVersion } from '../version';
 import { Bundle, Consent } from 'fhir/r5';
-import { RemoteCdsResourceLabeler } from '../simulator/remote_cds_resource_labler';
+import { RemoteCdsResourceLabeler } from '../simulator/remote_cds_resource_labeler';
 import { ConsentCategorySettings, ConsoleDataSharingEngine, DummyRuleProvider } from '@asushares/core';
 
-import { json } from 'stream/consumers';
 import csvParser from 'csv-parser';
 import { performance } from 'perf_hooks';
 import Progress from 'ts-progress';
@@ -178,36 +177,51 @@ shares.command('simulate-consent-cds')
 	.argument('<confidenceThreshold>', 'Confidence threshold for the simulator')
 	.argument('<fhirBaseUrl>', 'URL of the FHIR server from which to fetch Consent documents')
 	.argument('<consentId>', 'Identifier of a Consent resource to simulate')
-	.argument('<bundleFile>', 'Local arbitrary JSON FHIR Bundle file to use as patient record content')
+	.argument('<bundleDirectory>', 'Local arbitrary JSON FHIR Bundle file to use as patient record content')
 	.argument('<outputDirectory>', 'Directory in which to write simulator output')
-	.action((cdsBaseUrl, confidenceThreshold, fhirBaseUrl, consentId, bundleFile, outputDirectory, options) => {
-		const sBundleFile = safeFilePathFor(bundleFile);
-		const url = `${fhirBaseUrl}/Consent/${consentId}`;
-		axios.get(url, { headers: { 'Accept': 'application/fhir+json' } }).then((response) => {
-			const consent = response.data as Consent;
-			const sOutputDirectory = safeFilePathFor(outputDirectory);
-
-			const json: Bundle = JSON.parse(fs.readFileSync(sBundleFile).toString());
-			simulateConsent(cdsBaseUrl, confidenceThreshold, consent, json, sOutputDirectory);
-		}).catch((error) => {
-			console.error(`Error fetching Consent resource:`, error);
+	.action((cdsBaseUrl, confidenceThreshold, fhirBaseUrl, consentId, bundleDirectory, outputDirectory, options) => {
+		fs.readdirSync(bundleDirectory).forEach((file) => {
+			if (!file.endsWith('.json')) {
+				console.warn(`Ignoring file that does not end in '.json': ${file}`);
+			} else {
+				const sBundleFile = safeFilePathFor(path.join(bundleDirectory, file));
+				const url = `${fhirBaseUrl}/Consent/${consentId}`;
+				axios.get(url, { headers: { 'Accept': 'application/fhir+json' } }).then((response) => {
+					const consent = response.data as Consent;
+					const sOutputDirectory = safeFilePathFor(outputDirectory);
+					const json: Bundle = JSON.parse(fs.readFileSync(sBundleFile).toString());
+					simulateConsent(cdsBaseUrl, confidenceThreshold, consent, json, sOutputDirectory);
+				}).catch((error) => {
+					console.error(`Error fetching Consent resource:`, error);
+				});
+			}
 		});
 	});
 
 shares
-.command('verify-codes')
-    .description(
-        'Verifies JSON files for relevant codes based on a provided CSV and deletes irrelevant files if the delete flag is set.'
-    )
-    .argument('<fhirPath>', 'Path to the directory containing JSON files')
-    .argument('<csvFilePath>', 'Path to the CSV file containing codes')
-    .option('--delete', 'Delete irrelevant files')
-    .action((fhirPath, csvFilePath, options) => {
-        const {delete: deleteFlag } = options;
-        verifyCodes(fhirPath, csvFilePath, deleteFlag);
-    });
+	.command('verify-codes')
+	.description(
+		'Verifies JSON files for relevant codes based on a provided CSV and deletes irrelevant files if the delete flag is set.'
+	)
+	.argument('<fhirPath>', 'Path to the directory containing JSON files')
+	.argument('<csvFilePath>', 'Path to the CSV file containing codes')
+	.option('--delete', 'Delete irrelevant files')
+	.action((fhirPath, csvFilePath, options) => {
+		const { delete: deleteFlag } = options;
+		verifyCodes(fhirPath, csvFilePath, deleteFlag);
+	});
 
 program.parse(process.argv);
+
+function firstFirstPatientId(bundle: Bundle) {
+	let id = null;
+	bundle.entry?.forEach((entry) => {
+		if (entry.resource?.resourceType == 'Patient' && entry.resource?.id) {
+			id = entry.resource.id;
+		}
+	})
+	return id;
+}
 
 function simulateConsent(cdsBaseUrl: string, confidenceThreshold: number, consent: Consent, bundle: Bundle, outputDirectory: string) {
 	const labeler = new RemoteCdsResourceLabeler(consent, bundle, cdsBaseUrl, confidenceThreshold);
@@ -220,13 +234,17 @@ function simulateConsent(cdsBaseUrl: string, confidenceThreshold: number, consen
 	sharingContextSettings.research.enabled = true;
 
 	labeler.recomputeLabels().then(() => {
-		// simulator.recomputeConsentDecisions();
-		console.log('Simulation complete');
+		// console.log('Labeling complete');
 		const decisions = engine.computeConsentDecisionsForResources(labeler.labeledResources, consent, sharingContextSettings);
 		let data = engine.exportDecisionsForCsv(sharingContextSettings, labeler.labeledResources, decisions);
-		const csvPath = path.join(outputDirectory, `consent-${consent.id}-simulation.csv`);
+		let patientId = firstFirstPatientId(bundle);
+		if(patientId) {
+		const csvPath = path.join(outputDirectory, `consent-${consent.id}-patient-${patientId}-simulation.csv`);
 		fs.writeFileSync(csvPath, data);
 		console.log(`CSV data written to ${csvPath}`);
+		} else {
+			console.warn(`No patient ID found in data file. Not writing CSV data.`);
+		}
 	}).catch((error) => {
 		console.error(`Error simulating Consent resource:`, error);
 	});
@@ -279,7 +297,7 @@ function safeFilePathFor(fileName: string) {
 	if (!path.isAbsolute(fileName)) {
 		safePath = path.join(process.cwd(), fileName);
 	}
-	console.debug(`Safe path: ${safePath}`);
+	// console.debug(`Safe path: ${safePath}`);
 	return safePath;
 }
 
@@ -339,140 +357,140 @@ function buildFHIRBundle(
 
 // Interfaces generated for mapping functions
 interface CodeSystemMapping {
-  [key: string]: string;
+	[key: string]: string;
 }
 
 interface Instance {
-  code: string;
-  system: string;
-  lineNumber: number;
+	code: string;
+	system: string;
+	lineNumber: number;
 }
 
 interface FileInstance {
-  file: string;
-  instances: Instance[];
+	file: string;
+	instances: Instance[];
 }
 
 // Maps code formats in CSV to the formats present in FHIR bundles
 const codeSystemMapping: CodeSystemMapping = {
-  "SNOMED-CT": "http://snomed.info/sct",
-  "LOINC": "http://loinc.org",
-  "RxNorm": "http://www.nlm.nih.gov/research/umls/rxnorm",
+	"SNOMED-CT": "http://snomed.info/sct",
+	"LOINC": "http://loinc.org",
+	"RxNorm": "http://www.nlm.nih.gov/research/umls/rxnorm",
 };
 
 async function parseCSV(filePath: string): Promise<Set<[string, string]>> {
-  return new Promise((resolve, reject) => {
-      const codes = new Set<[string, string]>();
-      fs.createReadStream(filePath)
-          .pipe(csvParser())
-          .on('data', (row) => {
-              if (row.Code && row.Code_Type && codeSystemMapping[row.Code_Type]) {
-                  codes.add([row.Code, codeSystemMapping[row.Code_Type]]);
-              }
-          })
-          .on('end', () => resolve(codes))
-          .on('error', reject);
-  });
+	return new Promise((resolve, reject) => {
+		const codes = new Set<[string, string]>();
+		fs.createReadStream(filePath)
+			.pipe(csvParser())
+			.on('data', (row) => {
+				if (row.Code && row.Code_Type && codeSystemMapping[row.Code_Type]) {
+					codes.add([row.Code, codeSystemMapping[row.Code_Type]]);
+				}
+			})
+			.on('end', () => resolve(codes))
+			.on('error', reject);
+	});
 }
 
 // TODO - Add option for custom paths for generated reports.
 async function verifyCodes(inputPath: string, inputCsv: string, deleteFlag: boolean) {
-  try {
-      const codes = await parseCSV(inputCsv);
-      // Other than non json files, selection ignores practitioner and hospital information
-      const totalFiles = fs.readdirSync(inputPath).filter(
-          (file) =>
-              file.endsWith('.json') &&
-              !file.startsWith('practitionerInformation') &&
-              !file.startsWith('hospitalInformation')
-      );
+	try {
+		const codes = await parseCSV(inputCsv);
+		// Other than non json files, selection ignores practitioner and hospital information
+		const totalFiles = fs.readdirSync(inputPath).filter(
+			(file) =>
+				file.endsWith('.json') &&
+				!file.startsWith('practitionerInformation') &&
+				!file.startsWith('hospitalInformation')
+		);
 
-      let relevantFiles = 0;
-      let irrelevantFiles = 0;
-      const deletedFiles: string[] = [];
-      const textSearchInstances: FileInstance[] = [];
-      const progressBar = Progress.create({
-          total: totalFiles.length,
-          pattern: 'Progress: {bar} | {current}/{total} Files | Elapsed: {elapsed}s | {percent}%',
-          textColor: 'green',
-      });
+		let relevantFiles = 0;
+		let irrelevantFiles = 0;
+		const deletedFiles: string[] = [];
+		const textSearchInstances: FileInstance[] = [];
+		const progressBar = Progress.create({
+			total: totalFiles.length,
+			pattern: 'Progress: {bar} | {current}/{total} Files | Elapsed: {elapsed}s | {percent}%',
+			textColor: 'green',
+		});
 
-      const startTime = performance.now();
+		const startTime = performance.now();
 
-      for (const [index, filename] of totalFiles.entries()) {
-          const filePath = path.join(inputPath, filename);
-          const lines = fs.readFileSync(filePath, 'utf-8').split('\n');
+		for (const [index, filename] of totalFiles.entries()) {
+			const filePath = path.join(inputPath, filename);
+			const lines = fs.readFileSync(filePath, 'utf-8').split('\n');
 
-          let found = false;
-          const instances: Instance[] = [];
+			let found = false;
+			const instances: Instance[] = [];
 
-          lines.forEach((line, lineIndex) => {
-              codes.forEach(([code, system]) => {
-                  if (line.includes(code)) {
-                      const above = lineIndex > 0 ? lines[lineIndex - 1] : '';
-                      const below = lineIndex < lines.length - 1 ? lines[lineIndex + 1] : '';
+			lines.forEach((line, lineIndex) => {
+				codes.forEach(([code, system]) => {
+					if (line.includes(code)) {
+						const above = lineIndex > 0 ? lines[lineIndex - 1] : '';
+						const below = lineIndex < lines.length - 1 ? lines[lineIndex + 1] : '';
 
-                      if (above.includes(system) || below.includes(system)) {
-                          instances.push({
-                              code,
-                              system,
-                              lineNumber: lineIndex + 1,
-                          });
-                          found = true;
-                      }
-                  }
-              });
-          });
+						if (above.includes(system) || below.includes(system)) {
+							instances.push({
+								code,
+								system,
+								lineNumber: lineIndex + 1,
+							});
+							found = true;
+						}
+					}
+				});
+			});
 
-          if (instances.length > 0) {
-              textSearchInstances.push({
-                  file: filename,
-                  instances,
-              });
-          }
+			if (instances.length > 0) {
+				textSearchInstances.push({
+					file: filename,
+					instances,
+				});
+			}
 
-          if (found) {
-              relevantFiles++;
-          } else {
-              irrelevantFiles++;
-              if (deleteFlag) {
-                  fs.unlinkSync(filePath);
-                  deletedFiles.push(filename);
-              }
-          }
-          progressBar.update();
-      }
+			if (found) {
+				relevantFiles++;
+			} else {
+				irrelevantFiles++;
+				if (deleteFlag) {
+					fs.unlinkSync(filePath);
+					deletedFiles.push(filename);
+				}
+			}
+			progressBar.update();
+		}
 
-      progressBar.done();
-      const endTime = performance.now();
-      const totalTime = ((endTime - startTime) / 1000).toFixed(2);
+		progressBar.done();
+		const endTime = performance.now();
+		const totalTime = ((endTime - startTime) / 1000).toFixed(2);
 
-      const report = {
-          totalFiles: totalFiles.length,
-          relevantFiles,
-          irrelevantFiles,
-          deletedFiles,
-          textSearchInstances,
-          totalTime: `${totalTime} seconds`,
-      };
+		const report = {
+			totalFiles: totalFiles.length,
+			relevantFiles,
+			irrelevantFiles,
+			deletedFiles,
+			textSearchInstances,
+			totalTime: `${totalTime} seconds`,
+		};
 
-      const reportPath = path.join(inputPath, 'verification_report.json');
-      fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+		const reportPath = path.join(inputPath, 'verification_report.json');
+		fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 
-      console.log('Verification complete:');
-      console.log(`  Total files processed: ${totalFiles.length}`);
-      console.log(`  Relevant files: ${relevantFiles}`);
-      console.log(`  Irrelevant files: ${irrelevantFiles}`);
-      if (deleteFlag) {
-          console.log(`  Files deleted: ${deletedFiles.length}`);
-      }
-      console.log(`  Total time: ${totalTime} seconds`);
-      console.log(`  Report saved to: ${reportPath}`);
-  } catch (error) {
-      if (error instanceof Error) {
-          console.error(`Error: ${error.message}`);
-      }
-  }
+		console.log('Verification complete:');
+		console.log(`  Total files processed: ${totalFiles.length}`);
+		console.log(`  Relevant files: ${relevantFiles}`);
+		console.log(`  Irrelevant files: ${irrelevantFiles}`);
+		if (deleteFlag) {
+			console.log(`  Files deleted: ${deletedFiles.length}`);
+		}
+		console.log(`  Total time: ${totalTime} seconds`);
+		console.log(`  Report saved to: ${reportPath}`);
+	} catch (error) {
+		if (error instanceof Error) {
+			console.error(`Error: ${error.message}`);
+		}
+	}
 }
 
 
