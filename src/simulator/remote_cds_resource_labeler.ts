@@ -9,7 +9,7 @@ export class RemoteCdsResourceLabeler {
     public labeledResources: FhirResource[] = [];
     public consentDecisions: { [key: string]: Card } = {};
 
-    constructor(public consent: Consent, public bundle: Bundle, public cdsBaseUrl: string, public threshold: number) {
+    constructor(public consent: Consent, public bundle: Bundle, public cdsBaseUrl: string, public threshold: number, public rulesFile: string | null) {
     }
 
     reset() {
@@ -24,6 +24,10 @@ export class RemoteCdsResourceLabeler {
         const headers: { [key: string]: string } = {};
         headers[DataSharingEngineContext.HEADER_CDS_REDACTION_ENABLED] = 'false';
         headers[DataSharingEngineContext.HEADER_CDS_CONFIDENCE_THRESHOLD] = this.threshold.toString();
+        headers[DataSharingEngineContext.HEADER_CDS_CREATE_AUDIT_EVENT_ENABLED] = 'false';
+        if(this.rulesFile) {
+            headers[DataSharingEngineContext.HEADER_CDS_RULES_FILE] = this.rulesFile;
+        }
         const url = this.cdsBaseUrl + '/cds-services/' + (new DataSharingCDSHookRequest().hook);
         console.debug('Invoking remote CDS labeling service at:', url);
         // console.debug('Data:', JSON.stringify(data.context));

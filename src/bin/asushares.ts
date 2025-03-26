@@ -179,7 +179,9 @@ shares.command('simulate-consent-cds')
 	.argument('<consentId>', 'Identifier of a Consent resource to simulate')
 	.argument('<bundleDirectory>', 'Local arbitrary directory of JSON FHIR Bundle files to use as patient record content. Each Bundle must contain a Patient resource.')
 	.argument('<outputDirectory>', 'Directory in which to write simulator output')
+	.option('-r, --rules-file <fileName.json>', 'Name of an alternate server-side JSON file containing rules for the engine')
 	.action((cdsBaseUrl, confidenceThreshold, fhirBaseUrl, consentId, bundleDirectory, outputDirectory, options) => {
+		const rulesFile: string | null = options.rulesFile || null;
 		fs.readdirSync(bundleDirectory).forEach((file) => {
 			if (!file.endsWith('.json')) {
 				console.warn(`Ignoring file that does not end in '.json': ${file}`);
@@ -190,7 +192,7 @@ shares.command('simulate-consent-cds')
 					const consent = response.data as Consent;
 					const sOutputDirectory = safeFilePathFor(outputDirectory);
 					const json: Bundle = JSON.parse(fs.readFileSync(sBundleFile).toString());
-					simulateConsent(cdsBaseUrl, confidenceThreshold, consent, json, sOutputDirectory);
+					simulateConsent(cdsBaseUrl, confidenceThreshold, consent, json, sOutputDirectory, rulesFile);
 				}).catch((error) => {
 					console.error(`Error fetching Consent resource:`, error);
 				});
@@ -223,12 +225,12 @@ function firstFirstPatientId(bundle: Bundle) {
 	return id;
 }
 
-function simulateConsent(cdsBaseUrl: string, confidenceThreshold: number, consent: Consent, bundle: Bundle, outputDirectory: string) {
-	const labeler = new RemoteCdsResourceLabeler(consent, bundle, cdsBaseUrl, confidenceThreshold);
+function simulateConsent(cdsBaseUrl: string, confidenceThreshold: number, consent: Consent, bundle: Bundle, outputDirectory: string, rulesFile: string | null) {
+	const labeler = new RemoteCdsResourceLabeler(consent, bundle, cdsBaseUrl, confidenceThreshold, rulesFile);
 	console.log(`Simulating Consent/${consent.id} from server with local Bundle of ${bundle.entry?.length} resources`);
 
 	const ruleProvider = new DummyRuleProvider();
-	const engine = new ConsoleDataSharingEngine(ruleProvider, confidenceThreshold, false);
+	const engine = new ConsoleDataSharingEngine(ruleProvider, confidenceThreshold, false, false);
 	const sharingContextSettings = new ConsentCategorySettings();
 	sharingContextSettings.treatment.enabled = true;
 	sharingContextSettings.research.enabled = true;
@@ -238,10 +240,10 @@ function simulateConsent(cdsBaseUrl: string, confidenceThreshold: number, consen
 		const decisions = engine.computeConsentDecisionsForResources(labeler.labeledResources, consent, sharingContextSettings);
 		let data = engine.exportDecisionsForCsv(sharingContextSettings, labeler.labeledResources, decisions);
 		let patientId = firstFirstPatientId(bundle);
-		if(patientId) {
-		const csvPath = path.join(outputDirectory, `consent-${consent.id}-patient-${patientId}-simulation.csv`);
-		fs.writeFileSync(csvPath, data);
-		console.log(`CSV data written to ${csvPath}`);
+		if (patientId) {
+			const csvPath = path.join(outputDirectory, `consent-${consent.id}-patient-${patientId}-simulation.csv`);
+			fs.writeFileSync(csvPath, data);
+			console.log(`CSV data written to ${csvPath}`);
 		} else {
 			console.warn(`No patient ID found in data file. Not writing CSV data for this file.`);
 		}
