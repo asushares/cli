@@ -16,11 +16,14 @@ export class RemoteCdsResourceLabeler {
         this.labeledResources = [];
     }
 
-    recomputeLabels() {
+    recomputeLabels(sendConsentOverride: boolean = false) {
         let patientId = this.consent?.subject?.reference || ('Patient/' + this.consent?.subject?.id);
         const data = new DataSharingCDSHookRequest();
         data.context.patientId = [{ value: patientId }];
         data.context.content = this.bundle;
+        if(sendConsentOverride) {
+            data.context.consent = [this.consent];
+        }
         const headers: { [key: string]: string } = {};
         headers[DataSharingEngineContext.HEADER_CDS_REDACTION_ENABLED] = 'false';
         headers[DataSharingEngineContext.HEADER_CDS_CONFIDENCE_THRESHOLD] = this.threshold.toString();

@@ -35,16 +35,16 @@
   },
   "homepage": "https://github.com/asushares/cli#README",
   "dependencies": {
-    "@asushares/core": "^2.11.2",
+    "@asushares/core": "^2.12.2",
     "axios": "^1.8.4",
     "commander": "^13.1.0",
     "csv-parser": "^3.2.0",
     "ts-progress": "^0.1.9"
   },
   "devDependencies": {
+    "@types/fhir": "^0.0.41",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.13.13",
-    "@types/fhir": "^0.0.41",
     "nodemon": "^3.1.9",
     "ts-jest": "^29.3.0",
     "ts-node": "^10.9.2"

@@ -15,6 +15,7 @@ import csvParser from 'csv-parser';
 import { performance } from 'perf_hooks';
 import Progress from 'ts-progress';
 
+// import {start, stop}  from 'marky';
 
 
 let dryRun = false;
@@ -171,6 +172,7 @@ shares.command('synthea-upload')
 		});
 	});
 
+
 shares.command('simulate-consent-cds')
 	.description('Headless consent simulator')
 	.argument('<cdsBaseUrl>', 'URL of the FHIR server from which to fetch Consent documents')
@@ -182,6 +184,7 @@ shares.command('simulate-consent-cds')
 	.option('-r, --rules-file <fileName.json>', 'Name of an alternate server-side JSON file containing rules for the engine')
 	.option('-d, --dry-run', 'Perform a dry run without modifying any resources')
 	.action((cdsBaseUrl, confidenceThreshold, fhirBaseUrl, consentId, bundleDirectory, outputDirectory, options) => {
+		// marky.mark('simulator');
 		dryRun = options.dryRun;
 		if (dryRun) {
 			console.log('Dry run enabled. No resources will be modified.');
@@ -193,6 +196,17 @@ shares.command('simulate-consent-cds')
 			const consent = response.data as Consent;
 			simulateAllConsents(cdsBaseUrl, parseFloat(confidenceThreshold), consent, bundleDirectory, sOutputDirectory, rulesFile).then(() => {
 				console.log('Simulation complete');
+				// marky.stop('total');
+				// marky.entries().forEach((entry: any) => {
+				// 	console.log(`${entry.name}: ${entry.duration}`);
+				// 	console.log(entry.toJSON());
+				// });
+				// console.log('pp');				
+				// swAll.prettyPrint();
+				// console.log('s');				
+				// console.log(swAll.shortSummary());
+				// console.log('l');
+				// console.log(swAll.getTotalTime());
 			});
 		}).catch((error) => {
 			console.error(`Error fetching Consent resource:`, error);
@@ -240,7 +254,7 @@ async function simulateConsent(cdsBaseUrl: string, confidenceThreshold: number, 
 	sharingContextSettings.treatment.enabled = true;
 	sharingContextSettings.research.enabled = true;
 
-	await labeler.recomputeLabels();
+	await labeler.recomputeLabels(true);
 	// .then(() => {
 	// console.log('Labeling complete');
 	const decisions = engine.computeConsentDecisionsForResources(labeler.labeledResources, consent, sharingContextSettings);
