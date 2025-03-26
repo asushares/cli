@@ -180,23 +180,28 @@ shares.command('simulate-consent-cds')
 	.argument('<bundleDirectory>', 'Local arbitrary directory of JSON FHIR Bundle files to use as patient record content. Each Bundle must contain a Patient resource.')
 	.argument('<outputDirectory>', 'Directory in which to write simulator output')
 	.option('-r, --rules-file <fileName.json>', 'Name of an alternate server-side JSON file containing rules for the engine')
+	.option('-d, --dry-run', 'Perform a dry run without modifying any resources')
 	.action((cdsBaseUrl, confidenceThreshold, fhirBaseUrl, consentId, bundleDirectory, outputDirectory, options) => {
+		dryRun = options.dryRun;
+		if (dryRun) {
+			console.log('Dry run enabled. No resources will be modified.');
+		}
 		const rulesFile: string | null = options.rulesFile || null;
-		fs.readdirSync(bundleDirectory).forEach((file) => {
-			if (!file.endsWith('.json')) {
-				console.warn(`Ignoring file that does not end in '.json': ${file}`);
-			} else {
-				const sBundleFile = safeFilePathFor(path.join(bundleDirectory, file));
-				const url = `${fhirBaseUrl}/Consent/${consentId}`;
-				axios.get(url, { headers: { 'Accept': 'application/fhir+json' } }).then((response) => {
-					const consent = response.data as Consent;
-					const sOutputDirectory = safeFilePathFor(outputDirectory);
+		const sOutputDirectory = safeFilePathFor(outputDirectory);
+		const url = `${fhirBaseUrl}/Consent/${consentId}`;
+		axios.get(url, { headers: { 'Accept': 'application/fhir+json' } }).then((response) => {
+			const consent = response.data as Consent;
+			fs.readdirSync(bundleDirectory).forEach((file) => {
+				if (!file.endsWith('.json')) {
+					console.warn(`Ignoring file that does not end in '.json': ${file}`);
+				} else {
+					const sBundleFile = safeFilePathFor(path.join(bundleDirectory, file));
 					const json: Bundle = JSON.parse(fs.readFileSync(sBundleFile).toString());
 					simulateConsent(cdsBaseUrl, confidenceThreshold, consent, json, sOutputDirectory, rulesFile);
-				}).catch((error) => {
-					console.error(`Error fetching Consent resource:`, error);
-				});
-			}
+				}
+			});
+		}).catch((error) => {
+			console.error(`Error fetching Consent resource:`, error);
 		});
 	});
 
@@ -242,8 +247,12 @@ function simulateConsent(cdsBaseUrl: string, confidenceThreshold: number, consen
 		let patientId = firstFirstPatientId(bundle);
 		if (patientId) {
 			const csvPath = path.join(outputDirectory, `consent-${consent.id}-patient-${patientId}-simulation.csv`);
-			fs.writeFileSync(csvPath, data);
-			console.log(`CSV data written to ${csvPath}`);
+			if (dryRun) {
+				console.log(`Dry run: Would have written CSV data to ${csvPath}`);
+			} else {
+				fs.writeFileSync(csvPath, data);
+				console.log(`CSV data written to ${csvPath}`);
+			}
 		} else {
 			console.warn(`No patient ID found in data file. Not writing CSV data for this file.`);
 		}
