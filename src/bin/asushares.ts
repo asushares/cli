@@ -191,14 +191,8 @@ shares.command('simulate-consent-cds')
 		const url = `${fhirBaseUrl}/Consent/${consentId}`;
 		axios.get(url, { headers: { 'Accept': 'application/fhir+json' } }).then((response) => {
 			const consent = response.data as Consent;
-			fs.readdirSync(bundleDirectory).forEach((file) => {
-				if (!file.endsWith('.json')) {
-					console.warn(`Ignoring file that does not end in '.json': ${file}`);
-				} else {
-					const sBundleFile = safeFilePathFor(path.join(bundleDirectory, file));
-					const json: Bundle = JSON.parse(fs.readFileSync(sBundleFile).toString());
-					simulateConsent(cdsBaseUrl, confidenceThreshold, consent, json, sOutputDirectory, rulesFile);
-				}
+			simulateAllConsents(cdsBaseUrl, parseFloat(confidenceThreshold), consent, bundleDirectory, sOutputDirectory, rulesFile).then(() => {
+				console.log('Simulation complete');
 			});
 		}).catch((error) => {
 			console.error(`Error fetching Consent resource:`, error);
@@ -220,17 +214,23 @@ shares
 
 program.parse(process.argv);
 
-function firstFirstPatientId(bundle: Bundle) {
-	let id = null;
-	bundle.entry?.forEach((entry) => {
-		if (entry.resource?.resourceType == 'Patient' && entry.resource?.id) {
-			id = entry.resource.id;
+
+async function simulateAllConsents(cdsBaseUrl: string, confidenceThreshold: number, consent: Consent, bundleDirectory: string, outputDirectory: string, rulesFile: string | null) {
+	const dirs = fs.readdirSync(bundleDirectory);
+	for (let i = 0; i < dirs.length; i++) {
+		const file = dirs[i];
+		if (!file.endsWith('.json')) {
+			console.warn(`Ignoring file that does not end in '.json': ${file}`);
+		} else {
+			const sBundleFile = safeFilePathFor(path.join(bundleDirectory, file));
+			const json = JSON.parse(fs.readFileSync(sBundleFile).toString());
+			await simulateConsent(cdsBaseUrl, confidenceThreshold, consent, json, outputDirectory, rulesFile);
 		}
-	})
-	return id;
+	}
 }
 
-function simulateConsent(cdsBaseUrl: string, confidenceThreshold: number, consent: Consent, bundle: Bundle, outputDirectory: string, rulesFile: string | null) {
+
+async function simulateConsent(cdsBaseUrl: string, confidenceThreshold: number, consent: Consent, bundle: Bundle, outputDirectory: string, rulesFile: string | null) {
 	const labeler = new RemoteCdsResourceLabeler(consent, bundle, cdsBaseUrl, confidenceThreshold, rulesFile);
 	console.log(`Simulating Consent/${consent.id} from server with local Bundle of ${bundle.entry?.length} resources`);
 
@@ -240,25 +240,36 @@ function simulateConsent(cdsBaseUrl: string, confidenceThreshold: number, consen
 	sharingContextSettings.treatment.enabled = true;
 	sharingContextSettings.research.enabled = true;
 
-	labeler.recomputeLabels().then(() => {
-		// console.log('Labeling complete');
-		const decisions = engine.computeConsentDecisionsForResources(labeler.labeledResources, consent, sharingContextSettings);
-		let data = engine.exportDecisionsForCsv(sharingContextSettings, labeler.labeledResources, decisions);
-		let patientId = firstFirstPatientId(bundle);
-		if (patientId) {
-			const csvPath = path.join(outputDirectory, `consent-${consent.id}-patient-${patientId}-simulation.csv`);
-			if (dryRun) {
-				console.log(`Dry run: Would have written CSV data to ${csvPath}`);
-			} else {
-				fs.writeFileSync(csvPath, data);
-				console.log(`CSV data written to ${csvPath}`);
-			}
+	await labeler.recomputeLabels();
+	// .then(() => {
+	// console.log('Labeling complete');
+	const decisions = engine.computeConsentDecisionsForResources(labeler.labeledResources, consent, sharingContextSettings);
+	let data = engine.exportDecisionsForCsv(sharingContextSettings, labeler.labeledResources, decisions);
+	let patientId = firstFirstPatientId(bundle);
+	if (patientId) {
+		const csvPath = path.join(outputDirectory, `consent-${consent.id}-patient-${patientId}-simulation.csv`);
+		if (dryRun) {
+			console.log(`Dry run: Would have written CSV data to ${csvPath}`);
 		} else {
-			console.warn(`No patient ID found in data file. Not writing CSV data for this file.`);
+			fs.writeFileSync(csvPath, data);
+			console.log(`CSV data written to ${csvPath}`);
 		}
-	}).catch((error) => {
-		console.error(`Error simulating Consent resource:`, error);
-	});
+	} else {
+		console.warn(`No patient ID found in data file. Not writing CSV data for this file.`);
+	}
+	// }).catch((error) => {
+	// 	console.error(`Error simulating Consent resource:`, error);
+	// });
+}
+
+function firstFirstPatientId(bundle: Bundle) {
+	let id = null;
+	bundle.entry?.forEach((entry) => {
+		if (entry.resource?.resourceType == 'Patient' && entry.resource?.id) {
+			id = entry.resource.id;
+		}
+	})
+	return id;
 }
 
 async function uploadResources(_paths: string[], directory: string, fhirUrl: string) {

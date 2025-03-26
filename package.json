@@ -1,6 +1,6 @@
 {
   "name": "@asushares/cli",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "ASU SHARES CLI aimed at supporting CQL (Clinical Quality Language) operations on FHIR servers.",
   "main": "index.js",
   "bin": {
