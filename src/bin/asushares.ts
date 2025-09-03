@@ -261,6 +261,7 @@ async function simulateConsent(cdsBaseUrl: string, confidenceThreshold: number, 
 	let data = engine.exportDecisionsForCsv(sharingContextSettings, labeler.labeledResources, decisions);
 	let patientId = firstFirstPatientId(bundle);
 	if (patientId) {
+		fs.mkdirSync(outputDirectory, { recursive: true });
 		const csvPath = path.join(outputDirectory, `consent-${consent.id}-patient-${patientId}-simulation.csv`);
 		if (dryRun) {
 			console.log(`Dry run: Would have written CSV data to ${csvPath}`);
