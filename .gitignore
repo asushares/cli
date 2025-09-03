@@ -15,3 +15,6 @@ testcases/
 
 # Build
 *.tgz
+
+data/
+paper/

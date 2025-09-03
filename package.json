@@ -35,7 +35,7 @@
   },
   "homepage": "https://github.com/asushares/cli#README",
   "dependencies": {
-    "@asushares/core": "^2.12.6",
+    "@asushares/core": "^3.0.3",
     "axios": "^1.11.0",
     "commander": "^14.0.0",
     "csv-parser": "^3.2.0",
