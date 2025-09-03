@@ -1,7 +1,14 @@
 # ASU SHARES CLI
 Command-line utilities aimed at supporting FHIR Consent management and CQL (Clinical Quality Language) operations on FHIR servers. Written and maintained in TypeScript using the [Commander](https://www.npmjs.com/package/commander) library.
 
-## Commands
+
+## CLI Usage
+
+`asushares --version` for CLI utility version information
+`asushares --help` for subcommand documentation and examples
+
+
+## Subcommands
 
 ### 1. `convert <filePath> [outputPath]`
 Converts a `.cql` file to a base64 encoded string.
