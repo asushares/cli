@@ -89,6 +89,41 @@ Verifies JSON files for relevant codes based on a provided CSV and deletes irrel
   ts-node asushares.ts verify-codes /Users/username/Documents/synthea/output/fhir /Users/username/Documents/synthea/Verification_CSV.csv
   ```
 
+### 7. `valueset <ids...> [options]`
+Downloads VSAC ValueSets and optionally uploads them to a HAPI-FHIR server.
+
+- **Arguments:**
+  - `<ids...>`: VSAC OIDs or canonical URLs to process.
+
+- **Options:**
+  - `--mode <m>`: Specify the operation mode (`definition`, `expansion`, or `both`). Default: `expansion`.
+  - `--version <yyyymmdd>`: Specify a specific VSAC ValueSet version.
+  - `--filter <text>`: Apply a server-side filter for `$expand` (optional).
+  - `--out <dir>`: Output directory for downloaded files. Default: `./valuesets`.
+  - `--post <fhirBaseUrl>`: Post the downloaded ValueSets to a FHIR server.
+  - `--post-mode <m>`: Specify the upload mode (`definition` or `expanded`). Default: `expanded`.
+  - `--bundle`: Wrap uploads in a transaction Bundle.
+  - `--umls-key <key>`: UMLS API key (overrides the `UMLS_API_KEY` environment variable).
+  - `--count <n>`: Expansion page size. Default: `1000`.
+  - `--concurrency <n>`: Number of concurrent OIDs to fetch. Default: `4`.
+  - `--retry <n>`: Maximum retries for transient errors. Default: `3`.
+  - `--cache <dir>`: Cache directory for fetched pages. Default: `.vsac_cache`.
+  - `--dry-run`: Print actions without making changes. Default: `false`.
+
+- **Usage:**
+  ```bash
+  ts-node asushares.ts valueset 2.16.840.1.113762.1.4.1110.71 2.16.840.1.113883.3.464.1003.106.11.1001 --out ./valuesets
+  ```
+
+  ```bash
+  ts-node asushares.ts valueset 2.16.840.1.113762.1.4.1110.71 --mode both --post http://hapi.fhir.server/baseR4
+  ```
+
+  ```bash
+  ts-node asushares.ts valueset 2.16.840.1.113762.1.4.1110.71 --umls-key your-umls-key --cache ./custom_cache
+  ```
+```
+
 ## Dependencies
 
  - commander: Command-line argument parsing.
