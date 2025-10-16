@@ -228,6 +228,85 @@ shares
 
 program.parse(process.argv);
 
+shares
+	.command('valueset')
+	.description('Download VSAC ValueSets and optionally upload to a HAPI-FHIR server')
+	.argument('<ids...>', 'VSAC OIDs or canonical URLs')
+	.option('--mode <m>', 'definition|expansion|both', 'expansion')
+	.option('--version <yyyymmdd>', 'Specific VSAC ValueSet version')
+	.option('--filter <text>', 'Server-side filter for $expand (optional)')
+	.option('--out <dir>', 'Output directory', './valuesets')
+	.option('--post <fhirBaseUrl>', 'Post to a FHIR server after download')
+	.option('--post-mode <m>', 'definition|expanded', 'expanded')
+	.option('--bundle', 'Wrap uploads in a transaction Bundle')
+	.option('--umls-key <key>', 'UMLS API key (overrides env)')
+	.option('--count <n>', 'Expansion page size', '1000')
+	.option('--concurrency <n>', 'Concurrent OIDs to fetch', '4')
+	.option('--retry <n>', 'Max retries for transient errors', '3')
+	.option('--cache <dir>', 'Cache dir for fetched pages', '.vsac_cache')
+	.option('--dry-run', 'Print actions without making changes', false)
+	.action(async (ids: string[], opts: any) => {
+		try {
+			const umlsKey = opts.umlsKey || process.env.UMLS_API_KEY;
+			if (!umlsKey) throw new Error('Missing UMLS API key. Set --umls-key or UMLS_API_KEY.');
+			const client = buildVsacAxios(umlsKey);
+			const concurrency = Math.max(1, +opts.concurrency || 4);
+			const results: any[] = [];
+			const progressBar = Progress.create({
+				total: ids.length,
+				pattern: 'Progress: {bar} | {current}/{total} OIDs | Elapsed: {elapsed}s | {percent}%'
+			});
+			let running = 0, idx = 0;
+			async function next() {
+				if (idx >= ids.length) return;
+				const myIdx = idx++;
+				running++;
+				const id = ids[myIdx];
+				try {
+					const oid = normalizeVsacId(id);
+					let defRes: any = null, expRes: any = null, versionForName: string | null = null;
+					if (opts.mode === 'definition' || opts.mode === 'both') {
+						defRes = opts.dryRun ? { resourceType: 'ValueSet', id: oid, version: opts.version || 'unknown' } : await fetchValueSetDefinition(client, oid, opts.version);
+						versionForName = deriveVsacVersion(defRes) || opts.version || 'unknown';
+						writeValueSetFiles(opts.out, oid, String(versionForName), defRes, 'definition');
+					}
+					if (opts.mode === 'expansion' || opts.mode === 'both') {
+						const pages = opts.dryRun ? [{ resourceType: 'ValueSet', id: oid, version: opts.version || 'unknown', expansion: { contains: [] } }] : await fetchValueSetExpansion(client, oid, { version: opts.version, filter: opts.filter, count: +opts.count, cacheDir: opts.cache, dryRun: opts.dryRun, retry: +opts.retry });
+						const merged = mergeExpansionPages(pages);
+						versionForName = deriveVsacVersion(merged) || versionForName || opts.version || 'unknown';
+						writeValueSetFiles(opts.out, oid, String(versionForName), merged, 'expanded');
+						expRes = merged;
+					}
+					results[myIdx] = { oid, defRes, expRes, version: versionForName };
+				} catch (e: any) {
+					console.error(`[${id}] Error:`, e.response?.data ? operationOutcomeToMessage(e.response.data) : e.message);
+					results[myIdx] = { oid: id, error: e.message };
+				}
+				progressBar.update();
+				running--;
+				if (idx < ids.length) await next();
+			}
+			const starters = Array(Math.min(concurrency, ids.length)).fill(0).map(() => next());
+			await Promise.all(starters);
+			progressBar.done();
+			if (opts.post) {
+				const toUpload = results.flatMap(r => {
+					if (opts.postMode === 'expanded' && r.expRes) return [r.expRes];
+					if (opts.postMode === 'definition' && r.defRes) return [r.defRes];
+					return [];
+				});
+				await postValueSetsToHapi(opts.post, toUpload, { bundle: !!opts.bundle, dryRun: opts.dryRun });
+			}
+			console.log('Summary:');
+			console.log(`  OIDs processed: ${ids.length}`);
+			console.log(`  Downloaded: ${results.filter(r => !r.error).length}`);
+			console.log(`  Errors: ${results.filter(r => r.error).length}`);
+		} catch (e: any) {
+			console.error('Fatal error:', e.message);
+			process.exit(1);
+		}
+	});
+
 
 async function simulateAllConsents(cdsBaseUrl: string, confidenceThreshold: number, consent: Consent, bundleDirectory: string, outputDirectory: string, rulesFile: string | null) {
 	const dirs = fs.readdirSync(bundleDirectory);
@@ -531,3 +610,129 @@ async function verifyCodes(inputPath: string, inputCsv: string, deleteFlag: bool
 }
 
 
+
+// --- VSAC ValueSet Download/Upload Command Helper Functions ---
+const VSAC_BASE = 'https://cts.nlm.nih.gov/fhir';
+
+function normalizeVsacId(id: string): string {
+	// Accepts OID, urn:oid:OID, or canonical URL
+	const match = id.match(/([0-9]+\.[0-9.]+)/);
+	if (!match) throw new Error(`Could not extract OID from '${id}'`);
+	return match[1];
+}
+
+function buildVsacAxios(umlsKey: string) {
+	return axios.create({
+		baseURL: VSAC_BASE,
+		auth: { username: 'apikey', password: umlsKey },
+		headers: { Accept: 'application/fhir+json' },
+		timeout: 30000,
+	});
+}
+
+async function fetchValueSetDefinition(client: any, oid: string, version?: string) {
+	const url = `/ValueSet/${oid}` + (version ? `?valueSetVersion=${version}` : '');
+	const res = await client.get(url);
+	return res.data;
+}
+
+async function fetchValueSetExpansion(client: any, oid: string, opts: { version?: string, filter?: string, count: number, cacheDir?: string, dryRun?: boolean, retry: number }) {
+	let offset = 0, pages: any[] = [], got = 0, tries = 0;
+	while (true) {
+		let params: any = { offset, count: opts.count };
+		if (opts.version) params.valueSetVersion = opts.version;
+		if (opts.filter) params.filter = opts.filter;
+		const paramStr = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
+		const url = `/ValueSet/${oid}/$expand?${paramStr}`;
+		let page;
+		const cacheFile = opts.cacheDir ? path.join(opts.cacheDir, `vsac-${oid}-${opts.version || 'latest'}-page-${offset}.json`) : undefined;
+		if (opts.cacheDir && cacheFile && fs.existsSync(cacheFile)) {
+			page = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+		} else if (!opts.dryRun) {
+			while (tries < opts.retry) {
+				try {
+					const res = await client.get(url);
+					page = res.data;
+					if (opts.cacheDir && cacheFile) {
+						fs.mkdirSync(opts.cacheDir, { recursive: true });
+						fs.writeFileSync(cacheFile, JSON.stringify(page, null, 2));
+					}
+					break;
+				} catch (e: any) {
+					if (e.response && e.response.status >= 500 || e.response?.status === 429) {
+						tries++;
+						await new Promise(r => setTimeout(r, 1000 * Math.pow(2, tries)));
+						continue;
+					}
+					throw e;
+				}
+			}
+			if (!page) throw new Error(`Failed to fetch expansion after ${opts.retry} retries.`);
+		}
+		if (!page) throw new Error('No expansion page fetched.');
+		pages.push(page);
+		const contains = page.expansion?.contains?.length || 0;
+		got += contains;
+		const total = page.expansion?.total;
+		if (!contains || !total || got >= total) break;
+		if (contains === 0) break;
+		offset += contains;
+	}
+	return pages;
+}
+
+function mergeExpansionPages(pages: any[]): any {
+	if (!pages.length) throw new Error('No expansion pages to merge.');
+	const base = { ...pages[0] };
+	base.expansion = { ...base.expansion, contains: pages.flatMap(p => p.expansion?.contains || []) };
+	return base;
+}
+
+function deriveVsacVersion(resource: any): string {
+	return resource.version || resource.expansion?.identifier || 'unknown';
+}
+
+function writeValueSetFiles(outDir: string, oid: string, version: string, data: any, mode: 'definition' | 'expanded') {
+	fs.mkdirSync(outDir, { recursive: true });
+	const safeVersion = version || 'unknown';
+	const file = path.join(outDir, `ValueSet-${oid}-${safeVersion}-${mode}.json`);
+	fs.writeFileSync(file, JSON.stringify(data, null, 2));
+	return file;
+}
+
+async function postValueSetsToHapi(baseUrl: string, resources: any[], opts: { bundle?: boolean, dryRun?: boolean }) {
+	if (opts.bundle) {
+		const bundle = {
+			resourceType: 'Bundle',
+			type: 'transaction',
+			entry: resources.map(r => ({
+				resource: r,
+				request: { method: 'POST', url: 'ValueSet' },
+			}))
+		};
+		if (opts.dryRun) {
+			console.log(`[Dry run] Would POST bundle to ${baseUrl}/`);
+			return;
+		}
+		const res = await axios.post(baseUrl, bundle, {
+			headers: { 'Content-Type': 'application/fhir+json', 'Accept': 'application/fhir+json' },
+		});
+		console.log(`Bundle POST response: ${res.status} ${res.statusText}`);
+	} else {
+		for (const r of resources) {
+			if (opts.dryRun) {
+				console.log(`[Dry run] Would POST ValueSet to ${baseUrl}/ValueSet`);
+				continue;
+			}
+			const res = await axios.post(baseUrl.replace(/\/?$/, '/ValueSet'), r, {
+				headers: { 'Content-Type': 'application/fhir+json', 'Accept': 'application/fhir+json' },
+			});
+			console.log(`ValueSet POST response: ${res.status} ${res.statusText}`);
+		}
+	}
+}
+
+function operationOutcomeToMessage(oo: any): string {
+	return (oo.issue || []).map((i: any) => i.diagnostics).join('; ');
+}
+// --- End of VSAC ValueSet Download/Upload Command Helper Functions ---
